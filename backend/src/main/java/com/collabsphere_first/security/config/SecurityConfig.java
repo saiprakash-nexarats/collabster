@@ -95,6 +95,8 @@ public class SecurityConfig {
                                 "/v1/system/health",
                                 "/api/v1/explore/**",
                                 "/v1/explore/**",
+                                "/api/v1/storage/raw/**",
+                                "/v1/storage/raw/**",
                                 "/h2-console/**",
                                 "/actuator/**",
                                 "/oauth2/**",

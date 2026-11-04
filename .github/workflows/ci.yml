@@ -51,5 +51,5 @@ jobs:
 
       - name: Compile and run core unit tests
         working-directory: backend
-        run: mvn -B test -Dtest=AuthenticationSecurityHardeningTest,AuthenticationDatabaseIntegrationTest,WebSocketSecurityTest,MessagingWebSocketSecurityTest,MultiDeviceLogoutTest,AccountWideSessionRevocationTest,AccountLifecycleIntegrationTest,SystemHealthControllerTest,MessagingMembershipAuthorizationTest,CommunityEventParityTest
+        run: mvn -B test -Dtest=AuthenticationSecurityHardeningTest,AuthenticationDatabaseIntegrationTest,WebSocketSecurityTest,MessagingWebSocketSecurityTest,MultiDeviceLogoutTest,AccountWideSessionRevocationTest,AccountLifecycleIntegrationTest,SystemHealthControllerTest,MessagingMembershipAuthorizationTest,CommunityEventParityTest,StorageManagementServiceTest,StorageControllerTest
 

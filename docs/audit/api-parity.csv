@@ -130,9 +130,9 @@ Career,career.apply,POST,/v1/career/jobs/{id}/applications,-,DEFERRED,SCHED-P5-0
 Career,career.withdraw,POST,/v1/career/applications/{id}/withdraw,-,DEFERRED,SCHED-P5-055,Domain scheduled for Phase 5 implementation
 Career,career.jobApplications,GET,/v1/career/jobs/{id}/applications,-,DEFERRED,SCHED-P5-056,Domain scheduled for Phase 5 implementation
 Career,career.reviewApplication,PATCH,/v1/career/jobs/{id}/applications/{appId}/review,-,DEFERRED,SCHED-P5-057,Domain scheduled for Phase 5 implementation
-Storage,storage.requestUpload,POST,/v1/storage/uploads,-,DEFERRED,SCHED-P5-058,Domain scheduled for Phase 5 implementation
-Storage,storage.completeUpload,POST,/v1/storage/uploads/{id}/complete,-,DEFERRED,SCHED-P5-059,Domain scheduled for Phase 5 implementation
-Storage,storage.putFile,PUT,externalUploadUrl,-,DEFERRED,SCHED-P5-060,Domain scheduled for Phase 5 implementation
+Storage,storage.requestUpload,POST,/v1/storage/uploads,StorageController.java,IMPLEMENTED_AND_TESTED,-,Verified upload session initiation with signed URLs and metadata persistence
+Storage,storage.completeUpload,POST,/v1/storage/uploads/{id}/complete,StorageController.java,IMPLEMENTED_AND_TESTED,-,Verified upload completion with backend file verification and idempotency
+Storage,storage.putFile,PUT,externalUploadUrl,StorageController.java,IMPLEMENTED_AND_TESTED,-,Direct upload to signed ticket URL verified with HMAC validation
 Payments,payments.createOrder,POST,/v1/payments/orders,-,DEFERRED,SCHED-P5-061,Domain scheduled for Phase 5 implementation
 Payments,payments.confirmOrder,POST,/v1/payments/orders/{id}/confirm,-,DEFERRED,SCHED-P5-062,Domain scheduled for Phase 5 implementation
 Payments,payments.webhook,POST,/v1/payments/webhook,-,DEFERRED,SCHED-P5-063,Domain scheduled for Phase 5 implementation
