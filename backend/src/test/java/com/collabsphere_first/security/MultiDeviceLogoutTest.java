@@ -142,8 +142,8 @@ public class MultiDeviceLogoutTest {
         verify(notificationDeviceService, never()).revokeDevice(eq(tabletDeviceId), anyLong());
         verify(notificationDeviceService, never()).revokeAllForUser(anyLong());
 
-        // Cookie cleared
-        verify(jwtCookieService).clearRefreshTokenCookie(response);
+        // Cookie cleared with request-aware attributes
+        verify(jwtCookieService).clearRefreshTokenCookie(request, response);
     }
 
     @Test
@@ -156,7 +156,7 @@ public class MultiDeviceLogoutTest {
         verify(refreshTokenRepository).delete(phoneRefreshToken);
         verify(notificationDeviceService, never()).revokeDevice(any(), anyLong());
         verify(notificationDeviceService, never()).revokeAllForUser(anyLong());
-        verify(jwtCookieService).clearRefreshTokenCookie(response);
+        verify(jwtCookieService).clearRefreshTokenCookie(request, response);
     }
 
     @Test
@@ -196,8 +196,8 @@ public class MultiDeviceLogoutTest {
         // Revocation coordinator invoked
         verify(accountRevocationCoordinator).revokeAccountSessions(eq(100L), anyString());
 
-        // Cookie cleared
-        verify(jwtCookieService).clearRefreshTokenCookie(response);
+        // Cookie cleared with request-aware attributes
+        verify(jwtCookieService).clearRefreshTokenCookie(request, response);
     }
 
     @Test

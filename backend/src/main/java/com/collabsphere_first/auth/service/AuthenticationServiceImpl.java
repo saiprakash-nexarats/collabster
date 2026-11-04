@@ -10,6 +10,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 
 import java.time.LocalDateTime;
+import com.collabsphere_first.auth.exception.EmailDeliveryException;
 import com.collabsphere_first.auth.exception.InvalidOtpException;
 import com.collabsphere_first.auth.exception.OtpExpiredException;
 import com.collabsphere_first.otp.entity.Otp;
@@ -31,6 +32,7 @@ import com.collabsphere_first.user.repository.UserRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -44,6 +46,7 @@ import org.springframework.security.access.AccessDeniedException;
 import com.collabsphere_first.security.service.AccountRevocationCoordinator;
 import java.util.Optional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthenticationServiceImpl implements AuthenticationService {
@@ -66,6 +69,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
 
     @Override
+    @Transactional(noRollbackFor = {EmailDeliveryException.class})
     public MessageResponse register(RegisterRequest request) {
         request.normalize();
 
@@ -100,14 +104,28 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
         Otp otp = otpService.createOtp(savedUser);
 
-        try {
-            emailService.sendVerificationOtpEmail(
-                    savedUser.getEmail(),
-                    savedUser.getFirstName(),
-                    otp.getOtp()
+        boolean emailSent = false;
+        Exception emailError = null;
+        for (int attempt = 1; attempt <= 2; attempt++) {
+            try {
+                emailService.sendVerificationOtpEmail(
+                        savedUser.getEmail(),
+                        savedUser.getFirstName(),
+                        otp.getOtp()
+                );
+                emailSent = true;
+                break;
+            } catch (Exception e) {
+                emailError = e;
+                log.warn("Verification email attempt {} failed for user {}: {}", attempt, savedUser.getEmail(), e.getMessage());
+            }
+        }
+
+        if (!emailSent) {
+            log.error("All verification email attempts failed for user {}. Reason: {}", savedUser.getEmail(), emailError != null ? emailError.getMessage() : "Unknown");
+            throw new EmailDeliveryException(
+                    "Registration succeeded, but verification email failed to send. Please request a new code using the resend verification feature."
             );
-        } catch (Exception ignored) {
-            // Logged or handled gracefully in environments where external SMTP is absent
         }
 
         return MessageResponse.builder()
@@ -183,7 +201,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     }
 
     @Override
-    @Transactional
+    @Transactional(noRollbackFor = {EmailDeliveryException.class})
     public MessageResponse resendOtp(String email) {
 
         User user = userRepository.findByEmail(email)
@@ -196,11 +214,29 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
         Otp otp = otpService.createOtp(user);
 
-        emailService.sendVerificationOtpEmail(
-                user.getEmail(),
-                user.getFirstName(),
-                otp.getOtp()
-        );
+        boolean emailSent = false;
+        Exception emailError = null;
+        for (int attempt = 1; attempt <= 2; attempt++) {
+            try {
+                emailService.sendVerificationOtpEmail(
+                        user.getEmail(),
+                        user.getFirstName(),
+                        otp.getOtp()
+                );
+                emailSent = true;
+                break;
+            } catch (Exception e) {
+                emailError = e;
+                log.warn("Resend email attempt {} failed for user {}: {}", attempt, user.getEmail(), e.getMessage());
+            }
+        }
+
+        if (!emailSent) {
+            log.error("All resend email attempts failed for user {}. Reason: {}", user.getEmail(), emailError != null ? emailError.getMessage() : "Unknown");
+            throw new EmailDeliveryException(
+                    "Failed to send verification email. Please verify email service configuration or try again shortly."
+            );
+        }
 
         return MessageResponse.builder()
                 .message("A new OTP has been sent to your email.")

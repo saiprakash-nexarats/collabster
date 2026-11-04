@@ -23,20 +23,16 @@ public class OtpService {
         return String.format("%06d", RANDOM.nextInt(1_000_000));
 
     }
-@Transactional
+    @Transactional
     public Otp createOtp(User user) {
+        Otp otp = otpRepository.findByUser(user)
+                .orElseGet(() -> Otp.builder().user(user).build());
 
-        otpRepository.deleteByUser(user);
-
-        Otp otp = Otp.builder()
-                .otp(generateOtp())
-                .user(user)
-                .expiresAt(LocalDateTime.now().plusMinutes(10))
-                .verified(false)
-                .build();
+        otp.setOtp(generateOtp());
+        otp.setExpiresAt(LocalDateTime.now().plusMinutes(10));
+        otp.setVerified(false);
 
         return otpRepository.save(otp);
-
     }
 
     public Otp getOtp(User user) {

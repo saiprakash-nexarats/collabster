@@ -98,4 +98,28 @@ class WebSocketSecurityTest {
 
         verify(accessService).requireWritableMember(communityId, userId);
     }
+
+    @Test
+    @DisplayName("SUBSCRIBE to /user/queue/updates succeeds for authenticated user session")
+    void subscribe_userQueuePermittedForAuthenticatedUser() {
+        StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SUBSCRIBE);
+        accessor.setDestination("/user/queue/updates");
+        accessor.setUser(new UsernamePasswordAuthenticationToken(userPrincipal, null, Collections.emptyList()));
+        Message<?> msg = MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
+
+        Message<?> result = interceptor.preSend(msg, messageChannel);
+        org.assertj.core.api.Assertions.assertThat(result).isNotNull();
+    }
+
+    @Test
+    @DisplayName("SUBSCRIBE without authentication is rejected")
+    void subscribe_unauthenticatedRejected() {
+        StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SUBSCRIBE);
+        accessor.setDestination("/user/queue/updates");
+        Message<?> msg = MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
+
+        assertThatThrownBy(() -> interceptor.preSend(msg, messageChannel))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Authenticated STOMP session required");
+    }
 }

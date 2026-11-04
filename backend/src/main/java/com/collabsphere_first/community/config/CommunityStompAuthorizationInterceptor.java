@@ -43,8 +43,17 @@ public class CommunityStompAuthorizationInterceptor implements ChannelIntercepto
         if (StompCommand.SUBSCRIBE.equals(accessor.getCommand()) || StompCommand.SEND.equals(accessor.getCommand())) {
             Authentication authentication = authentication(accessor.getUser());
             String destination = accessor.getDestination();
-            Matcher matcher = destination == null ? null : COMMUNITY_CHANNEL_DESTINATION.matcher(destination);
-            if (matcher == null || !matcher.matches()) {
+            if (destination == null || destination.isBlank()) {
+                throw new IllegalArgumentException("Destination required for STOMP " + accessor.getCommand());
+            }
+
+            // User-scoped queues (e.g. /user/queue/updates): permitted for authenticated user sessions
+            if (destination.startsWith("/user/") || destination.startsWith("/queue/")) {
+                return message;
+            }
+
+            Matcher matcher = COMMUNITY_CHANNEL_DESTINATION.matcher(destination);
+            if (!matcher.matches()) {
                 throw new IllegalArgumentException("Unauthorized or invalid destination: " + destination);
             }
             UUID communityId = UUID.fromString(matcher.group(1));

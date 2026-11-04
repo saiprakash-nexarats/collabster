@@ -15,6 +15,18 @@ import java.util.Map;
 @RestControllerAdvice
 public class AuthExceptionHandler {
 
+    @ExceptionHandler(EmailDeliveryException.class)
+    public ResponseEntity<Object> handleEmailDelivery(
+            EmailDeliveryException ex,
+            HttpServletRequest request) {
+
+        return buildResponse(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+    }
+
     @ExceptionHandler(UserAlreadyExistsException.class)
     public ResponseEntity<Object> handleUserAlreadyExists(
             UserAlreadyExistsException ex,
