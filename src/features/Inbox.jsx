@@ -521,6 +521,10 @@ export function Messages() {
     const callMembers = members === false
       ? null
       : members || (matchedThread?.isGroup || matchedThread?.context === 'Group' ? matchedThread.members : null);
+    if (a.serviceState === 'connected') {
+      a.toast?.('Audio/video calling is disabled in this release.');
+      return;
+    }
     const person = people.find((p) => p.name === name);
     setActiveCall({
       open: true,
@@ -535,12 +539,6 @@ export function Messages() {
       members: callMembers,
       isGroup: Boolean(callMembers && callMembers.length > 0),
     });
-
-    if (a.serviceState === 'connected' && a.auth?.accessToken && active?.id) {
-      api.messages
-        .initiateCall(active.id, type, a.auth.accessToken)
-        .catch(() => {});
-    }
   };
 
   const endCall = () => {
