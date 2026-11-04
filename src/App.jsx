@@ -60,14 +60,10 @@ export default function App(){
   try {
    const urlParams=new URLSearchParams(window.location.search);
    const oauthCode=urlParams.get('oauth_code');
-   const legacyOauthToken=urlParams.get('oauth_token');
-   if(oauthCode || legacyOauthToken){
+   if(oauthCode){
     window.history.replaceState({},document.title,window.location.pathname);
-    const resolveToken = oauthCode 
-      ? api.auth.oauthExchange(oauthCode).then(res => res.accessToken)
-      : Promise.resolve(legacyOauthToken);
-      
-    resolveToken.then(accessToken => {
+    api.auth.oauthExchange(oauthCode).then(res => {
+     const accessToken = res?.accessToken;
      if(!accessToken) throw new Error('NO_ACCESS_TOKEN');
      return api.identity.me(accessToken).then(remote=>{
       const names=(remote.displayName||'').trim().split(/\s+/);

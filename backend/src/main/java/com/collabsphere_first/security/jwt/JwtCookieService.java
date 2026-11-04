@@ -15,21 +15,37 @@ public class JwtCookieService {
     private static final String REFRESH_COOKIE_NAME = "refreshToken";
     private static final String REFRESH_COOKIE_PATH = "/";
 
-    @Value("${jwt.cookie.secure:false}")
-    private boolean defaultSecure;
+    @Value("${jwt.cookie.secure:#{null}}")
+    private Boolean configuredSecure;
 
-    private boolean determineSecure(HttpServletRequest request) {
-        if (defaultSecure) {
-            return true;
+    @Value("${spring.profiles.active:}")
+    private String activeProfiles;
+
+    @Value("${spring.profiles.default:prod}")
+    private String defaultProfiles;
+
+    public boolean determineSecure(HttpServletRequest request) {
+        if (configuredSecure != null) {
+            return configuredSecure;
         }
-        if (request == null) {
+
+        String profiles = (activeProfiles != null && !activeProfiles.isBlank()) ? activeProfiles : defaultProfiles;
+        boolean isDev = profiles != null && profiles.toLowerCase().contains("dev");
+
+        if (request != null) {
+            boolean isHttps = request.isSecure() || "https".equalsIgnoreCase(request.getHeader("X-Forwarded-Proto"));
+            if (isHttps) {
+                return true;
+            }
+            if (!isDev) {
+                // Production environment behind proxy or direct HTTPS must be Secure
+                return true;
+            }
             return false;
         }
-        if (request.isSecure()) {
-            return true;
-        }
-        String proto = request.getHeader("X-Forwarded-Proto");
-        return "https".equalsIgnoreCase(proto);
+
+        // When request is omitted or in production, enforce Secure cookies
+        return !isDev;
     }
 
     public void addRefreshTokenCookie(
@@ -46,9 +62,8 @@ public class JwtCookieService {
         String sameSite = secure ? "None" : "Lax";
 
         ResponseCookie cookie = ResponseCookie.from(
-                        REFRESH_COOKIE_NAME,
-                        refreshToken
-                )
+                REFRESH_COOKIE_NAME,
+                refreshToken)
                 .httpOnly(true)
                 .secure(secure)
                 .sameSite(sameSite)
@@ -71,9 +86,8 @@ public class JwtCookieService {
         String sameSite = secure ? "None" : "Lax";
 
         ResponseCookie cookie = ResponseCookie.from(
-                        REFRESH_COOKIE_NAME,
-                        ""
-                )
+                REFRESH_COOKIE_NAME,
+                "")
                 .httpOnly(true)
                 .secure(secure)
                 .sameSite(sameSite)

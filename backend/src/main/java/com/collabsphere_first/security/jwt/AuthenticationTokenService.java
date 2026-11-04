@@ -5,6 +5,7 @@ import com.collabsphere_first.refreshtoken.entity.RefreshToken;
 import com.collabsphere_first.refreshtoken.repository.RefreshTokenRepository;
 import com.collabsphere_first.security.userdetails.UserPrincipal;
 import com.collabsphere_first.user.entity.User;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -23,6 +24,14 @@ public class AuthenticationTokenService {
     @Transactional
     public AuthenticationResponse authenticateUser(
             User user,
+            HttpServletResponse response) {
+        return authenticateUser(user, null, response);
+    }
+
+    @Transactional
+    public AuthenticationResponse authenticateUser(
+            User user,
+            HttpServletRequest request,
             HttpServletResponse response) {
 
         UserPrincipal userPrincipal = new UserPrincipal(user);
@@ -50,6 +59,7 @@ public class AuthenticationTokenService {
         refreshTokenRepository.save(refreshTokenEntity);
 
         jwtCookieService.addRefreshTokenCookie(
+                request,
                 response,
                 refreshToken
         );

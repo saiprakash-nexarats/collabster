@@ -5,9 +5,9 @@ import com.collabsphere_first.auth.dto.response.AuthenticationResponse;
 import com.collabsphere_first.auth.dto.response.MessageResponse;
 import com.collabsphere_first.auth.exception.InvalidOtpException;
 import com.collabsphere_first.auth.service.AuthenticationService;
-import com.collabsphere_first.otp.entity.Otp;
 import com.collabsphere_first.otp.repository.OtpRepository;
 import com.collabsphere_first.security.oauth2.OAuth2CodeStore;
+import com.collabsphere_first.security.oauth2.OAuth2SuccessHandler;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -35,32 +35,29 @@ public class AuthenticationController {
     @PostMapping("/login")
     public ResponseEntity<AuthenticationResponse> login(
             @Valid @RequestBody LoginRequest request,
+            HttpServletRequest httpRequest,
             HttpServletResponse response) {
         return ResponseEntity.ok(
-                authenticationService.login(request, response)
+                authenticationService.login(request, httpRequest, response)
         );
     }
 
     @PostMapping({"/verify-otp", "/verify-email"})
     public ResponseEntity<MessageResponse> verifyOtp(
             @RequestBody Map<String, String> body) {
-        String code = body.get("otp");
-        if (code == null || code.isBlank()) {
-            code = body.get("token");
-        }
-        String email = body.get("email");
+        String code = body != null ? (body.get("otp") != null && !body.get("otp").isBlank() ? body.get("otp") : body.get("token")) : null;
+        String email = body != null ? body.get("email") : null;
 
-        if ((email == null || email.isBlank()) && code != null) {
-            final String lookupCode = code.trim();
-            Otp otpEntity = otpRepository.findByOtp(lookupCode).orElse(null);
-            if (otpEntity != null && otpEntity.getUser() != null) {
-                email = otpEntity.getUser().getEmail();
-            }
+        if (email == null || email.isBlank()) {
+            throw new IllegalArgumentException("Email is required for OTP verification.");
+        }
+        if (code == null || code.isBlank()) {
+            throw new IllegalArgumentException("Verification code/token is required.");
         }
 
         VerifyOtpRequest request = VerifyOtpRequest.builder()
-                .email(email != null ? email.trim() : "")
-                .otp(code != null ? code.trim() : "")
+                .email(email.trim())
+                .otp(code.trim())
                 .build();
 
         return ResponseEntity.ok(
@@ -91,14 +88,16 @@ public class AuthenticationController {
 
     @PostMapping("/oauth2/exchange")
     public ResponseEntity<AuthenticationResponse> exchangeOAuth2Code(
+            HttpServletRequest request,
             @RequestBody Map<String, String> body) {
         String code = body != null ? body.get("code") : null;
         if (code == null || code.isBlank()) {
             throw new IllegalArgumentException("Authorization code is required.");
         }
-        AuthenticationResponse authResponse = oAuth2CodeStore.consumeCode(code.trim());
+        String clientFingerprint = OAuth2SuccessHandler.computeClientFingerprint(request);
+        AuthenticationResponse authResponse = oAuth2CodeStore.consumeCode(code.trim(), clientFingerprint);
         if (authResponse == null) {
-            throw new InvalidOtpException("Invalid or expired OAuth authorization code.");
+            throw new InvalidOtpException("Invalid, expired, or session-mismatched OAuth authorization code.");
         }
         return ResponseEntity.ok(authResponse);
     }

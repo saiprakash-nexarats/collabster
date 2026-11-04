@@ -27,6 +27,18 @@ public class OAuth2SuccessHandler implements AuthenticationSuccessHandler {
     @Value("${collobster.frontend.url:http://localhost:5173}")
     private String frontendUrl;
 
+    public static String computeClientFingerprint(HttpServletRequest request) {
+        if (request == null) return "unknown";
+        String ip = request.getHeader("X-Forwarded-For");
+        if (ip == null || ip.isBlank()) {
+            ip = request.getRemoteAddr();
+        } else if (ip.contains(",")) {
+            ip = ip.split(",")[0].trim();
+        }
+        String ua = request.getHeader("User-Agent");
+        return (ip != null ? ip : "") + "|" + (ua != null ? ua : "");
+    }
+
     @Override
     public void onAuthenticationSuccess(
             HttpServletRequest request,
@@ -53,6 +65,7 @@ public class OAuth2SuccessHandler implements AuthenticationSuccessHandler {
         AuthenticationResponse authResponse =
          authenticationTokenService.authenticateUser(
                 user,
+                request,
                 response
         );
 
@@ -75,10 +88,10 @@ public class OAuth2SuccessHandler implements AuthenticationSuccessHandler {
                 ? frontendUrl.replaceAll("/+$", "")
                 : "http://localhost:5173";
 
-        // SEC-003: Never pass raw bearer access tokens in URL query parameters.
-        // Issue a short-lived, single-use one-time authorization code (valid 60 seconds).
+        // SEC-003 & P1-01: Issue a browser-bound single-use one-time code (valid 60 seconds)
         String oneTimeCode = UUID.randomUUID().toString();
-        oAuth2CodeStore.saveCode(oneTimeCode, authResponse, 60);
+        String clientFingerprint = computeClientFingerprint(request);
+        oAuth2CodeStore.saveCode(oneTimeCode, authResponse, clientFingerprint, 60);
 
         String redirectUrl = base + "/?oauth_code=" + oneTimeCode;
         response.sendRedirect(redirectUrl);

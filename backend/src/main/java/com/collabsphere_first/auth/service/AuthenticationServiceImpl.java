@@ -121,6 +121,14 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     public AuthenticationResponse login(
             LoginRequest request,
             HttpServletResponse response) {
+        return login(request, null, response);
+    }
+
+    @Override
+    public AuthenticationResponse login(
+            LoginRequest request,
+            HttpServletRequest httpRequest,
+            HttpServletResponse response) {
 
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
@@ -135,6 +143,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
         return authenticationTokenService.authenticateUser(
                 user,
+                httpRequest,
                 response
         );
 
@@ -187,7 +196,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
         Otp otp = otpService.createOtp(user);
 
-        emailService.sendPasswordResetOtpEmail(
+        emailService.sendVerificationOtpEmail(
                 user.getEmail(),
                 user.getFirstName(),
                 otp.getOtp()
@@ -264,6 +273,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         refreshTokenRepository.save(storedToken);
 
         jwtCookieService.addRefreshTokenCookie(
+                request,
                 response,
                 newRefreshToken
         );
@@ -309,7 +319,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
             }
         }
 
-        jwtCookieService.clearRefreshTokenCookie(response);
+        jwtCookieService.clearRefreshTokenCookie(request, response);
 
         return MessageResponse.builder()
                 .message("Logged out successfully.")
@@ -356,7 +366,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         }
 
         // 5. Clear current session cookie
-        jwtCookieService.clearRefreshTokenCookie(response);
+        jwtCookieService.clearRefreshTokenCookie(request, response);
 
         return MessageResponse.builder()
                 .message("Logged out from all devices successfully.")

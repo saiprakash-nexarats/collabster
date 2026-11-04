@@ -10,8 +10,16 @@ public interface AuthenticationService {
 
     MessageResponse register(RegisterRequest request);
 
+    default AuthenticationResponse login(
+            LoginRequest request,
+            HttpServletResponse response
+    ) {
+        return login(request, null, response);
+    }
+
     AuthenticationResponse login(
             LoginRequest request,
+            HttpServletRequest httpRequest,
             HttpServletResponse response
     );
 
@@ -41,6 +49,7 @@ public interface AuthenticationService {
             HttpServletRequest request,
             HttpServletResponse response
     );
+
     MessageResponse forgotPassword(ForgotPasswordRequest request);
 
     MessageResponse verifyResetOtp(VerifyOtpRequest request);

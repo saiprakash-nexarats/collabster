@@ -52,3 +52,4 @@ jobs:
       - name: Compile and run core unit tests
         working-directory: backend
         run: mvn -B test -Dtest=AuthenticationSecurityHardeningTest,PlatformAuthorizationMatrixTest,SystemHealthControllerTest
+
