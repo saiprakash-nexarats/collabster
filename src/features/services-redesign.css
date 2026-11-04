@@ -1,0 +1,706 @@
+/* ─── Collobster Services & Professional Engagements CSS ───────────────────── */
+
+.collob-services-hub {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  width: 100%;
+}
+
+/* ── Hero & Trust Spotlight ── */
+.services-hero-banner {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 28px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--ocean) 12%, var(--surface)) 0%, var(--surface) 100%);
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+}
+
+.services-hero-banner::after {
+  content: '';
+  position: absolute;
+  top: -40px;
+  right: -40px;
+  width: 220px;
+  height: 220px;
+  background: radial-gradient(circle, color-mix(in srgb, var(--coral) 12%, transparent) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.services-hero-left {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.services-kicker-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: var(--sea);
+  color: var(--ocean);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  width: fit-content;
+}
+
+.services-hero-title {
+  margin: 0;
+  font-family: Fraunces, serif;
+  font-size: clamp(24px, 2.5vw, 34px);
+  line-height: 1.2;
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.services-hero-desc {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
+  max-width: 680px;
+}
+
+.services-hero-guarantees {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 6px;
+}
+
+.services-guarantee-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  padding: 6px 12px;
+  border-radius: 6px;
+}
+
+.services-hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.services-hero-stats {
+  display: flex;
+  gap: 16px;
+}
+
+.services-stat-box {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px 20px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 120px;
+}
+
+.services-stat-box strong {
+  font-family: Fraunces, serif;
+  font-size: 26px;
+  color: var(--ocean);
+  line-height: 1;
+}
+
+.services-stat-box span {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* ── Category Chips Strip ── */
+.services-category-strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
+}
+
+.service-cat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 24px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.service-cat-chip:hover {
+  background: var(--soft);
+  color: var(--ink);
+  border-color: color-mix(in srgb, var(--ink) 25%, var(--line));
+}
+
+.service-cat-chip.active {
+  background: var(--ink);
+  color: var(--surface);
+  border-color: var(--ink);
+}
+
+.service-cat-chip.active svg {
+  color: var(--coral);
+}
+
+/* ── Search & Filter Toolbar ── */
+.services-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+}
+
+.services-search-wrapper {
+  flex: 1 1 300px;
+}
+
+.services-filter-group {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.services-filter-select {
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  outline: none;
+  cursor: pointer;
+}
+
+/* ── Universal Service Catalog Grid ── */
+.universal-services-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 20px;
+}
+
+.universal-service-card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.universal-service-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+  border-color: color-mix(in srgb, var(--ocean) 40%, var(--line));
+}
+
+.service-card-media {
+  height: 160px;
+  width: 100%;
+  position: relative;
+  background: var(--canvas);
+  overflow: hidden;
+}
+
+.service-card-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.universal-service-card:hover .service-card-media img {
+  transform: scale(1.03);
+}
+
+.service-card-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  background: rgba(23, 36, 43, 0.85);
+  color: #fff;
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+
+.service-card-badge.blue {
+  background: #1e3a8a;
+  color: #bfdbfe;
+}
+
+.service-card-badge.gold {
+  background: #78350f;
+  color: #fef3c7;
+}
+
+.service-card-badge.green {
+  background: #064e3b;
+  color: #a7f3d0;
+}
+
+.service-card-badge.purple {
+  background: #581c87;
+  color: #e9d5ff;
+}
+
+.service-card-badge.rose {
+  background: #881337;
+  color: #fecdd3;
+}
+
+.service-delivery-pill {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--ink);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.service-card-body {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+}
+
+.service-provider-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.service-provider-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--line);
+}
+
+.service-provider-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.service-provider-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.service-provider-role {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.service-rating-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--gold);
+}
+
+.service-card-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--ink);
+}
+
+.service-card-description {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.service-card-deliverables {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.service-card-deliverables li {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ink);
+  line-height: 1.4;
+}
+
+.service-deliverable-check {
+  color: var(--ocean);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.service-card-footer {
+  margin-top: auto;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.service-pricing-block {
+  display: flex;
+  flex-direction: column;
+}
+
+.service-pricing-val {
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--ink);
+  font-family: Fraunces, serif;
+}
+
+.service-pricing-sub {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.service-card-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+/* ── Interactive Order Lifecycle / Engagements Tracker ── */
+.order-tracker-card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.order-tracker-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.order-id-badge {
+  font-family: monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ocean);
+  background: var(--sea);
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+.order-stepper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+}
+
+.order-step-node {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 140px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.order-step-node.completed {
+  color: #059669;
+}
+
+.order-step-node.current {
+  color: var(--ocean);
+  font-weight: 700;
+}
+
+.order-step-circle {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--line);
+  background: var(--surface);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.order-step-node.completed .order-step-circle {
+  background: #059669;
+  border-color: #059669;
+  color: #fff;
+}
+
+.order-step-node.current .order-step-circle {
+  background: var(--ocean);
+  border-color: var(--ocean);
+  color: #fff;
+}
+
+.order-step-line {
+  flex: 1;
+  height: 2px;
+  background: var(--line);
+  margin-right: 8px;
+}
+
+.order-step-node.completed .order-step-line {
+  background: #059669;
+}
+
+.order-actions-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* ── Custom RFPs & Open Requests ── */
+.rfp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 16px;
+}
+
+.rfp-card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rfp-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.rfp-budget-pill {
+  font-size: 12px;
+  font-weight: 800;
+  color: #065f46;
+  background: #d1fae5;
+  padding: 4px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.rfp-tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.rfp-tag {
+  font-size: 11px;
+  background: var(--canvas);
+  border: 1px solid var(--line);
+  padding: 2px 7px;
+  border-radius: 4px;
+  color: var(--muted);
+}
+
+.rfp-footer {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ── Multi-Step Booking & Scope Modal ── */
+.booking-checkout-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.tier-selector-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.tier-card-btn {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 14px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tier-card-btn:hover {
+  border-color: var(--ocean);
+  background: var(--soft);
+}
+
+.tier-card-btn.selected {
+  border: 2px solid var(--ocean);
+  background: color-mix(in srgb, var(--ocean) 8%, var(--surface));
+}
+
+.tier-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.tier-price {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--ocean);
+}
+
+.tier-desc {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.escrow-notice-box {
+  background: color-mix(in srgb, var(--ocean) 8%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--ocean) 25%, var(--line));
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--ink);
+  line-height: 1.5;
+}
+
+.escrow-notice-box strong {
+  color: var(--ocean);
+}
+
+/* ── Offer / List Service Form ── */
+.list-service-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 6px 0;
+}
+
+.form-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+@media (max-width: 768px) {
+  .services-hero-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 20px;
+  }
+  .services-hero-stats {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .services-stat-box {
+    flex: 1;
+    min-width: 0;
+  }
+  .form-two-col {
+    grid-template-columns: 1fr;
+  }
+  .universal-services-grid {
+    grid-template-columns: 1fr;
+  }
+  .rfp-grid {
+    grid-template-columns: 1fr;
+  }
+}

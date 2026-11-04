@@ -1,0 +1,78 @@
+package com.collabsphere_first.security.oauth2;
+
+import com.collabsphere_first.auth.dto.response.AuthenticationResponse;
+import com.collabsphere_first.security.jwt.AuthenticationTokenService;
+import com.collabsphere_first.user.entity.User;
+import com.collabsphere_first.user.repository.UserRepository;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.oauth2.core.user.OAuth2User;
+import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
+import org.springframework.stereotype.Component;
+
+import java.io.IOException;
+
+@Component
+@RequiredArgsConstructor
+public class OAuth2SuccessHandler implements AuthenticationSuccessHandler {
+    private final AuthenticationTokenService authenticationTokenService;
+    private final UserRepository userRepository;
+
+    @Value("${collobster.frontend.url:http://localhost:5173}")
+    private String frontendUrl;
+
+    @Override
+    public void onAuthenticationSuccess(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            Authentication authentication)
+            throws IOException, ServletException {
+
+        OAuth2User oauth2User = (OAuth2User) authentication.getPrincipal();
+
+        User user;
+
+        if (oauth2User instanceof AppOidcUser appOidcUser) {
+            user = appOidcUser.getUser();
+        } else if (oauth2User instanceof AppOAuth2User appOAuth2User) {
+            user = appOAuth2User.getUser();
+        } else {
+            String email = oauth2User.getAttribute("email");
+
+            user = userRepository.findByEmail(email)
+                    .orElseThrow(() ->
+                            new RuntimeException("User not found."));
+        }
+
+        AuthenticationResponse authResponse =
+         authenticationTokenService.authenticateUser(
+                user,
+                response
+        );
+
+        String accept = request.getHeader("Accept");
+        if (accept != null && accept.contains("application/json") && !accept.contains("text/html")) {
+            response.setContentType("application/json");
+            response.setCharacterEncoding("UTF-8");
+            response.getWriter().write(
+                    """
+                    {
+                        "accessToken":"%s",
+                        "tokenType":"Bearer"
+                    }
+                    """.formatted(authResponse.getAccessToken())
+            );
+            return;
+        }
+
+        String base = (frontendUrl != null && !frontendUrl.isBlank())
+                ? frontendUrl.replaceAll("/+$", "")
+                : "http://localhost:5173";
+        String redirectUrl = base + "/?oauth_token=" + authResponse.getAccessToken();
+        response.sendRedirect(redirectUrl);
+    }
+}

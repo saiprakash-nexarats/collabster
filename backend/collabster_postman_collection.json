@@ -1,0 +1,842 @@
+{
+  "info": {
+    "_postman_id": "collabster-communities-api-collection-v1",
+    "name": "CollabSphere Communities API",
+    "description": "Postman Collection for testing CollabSphere Communities Module APIs including Authentication, Community Management, Memberships, Posts, and Comments.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "authToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "userEmail",
+      "value": "user@example.com",
+      "type": "string"
+    },
+    {
+      "key": "communityId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "communitySlug",
+      "value": "tech-innovators-hub",
+      "type": "string"
+    },
+    {
+      "key": "postId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "commentId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "targetUserId",
+      "value": "2",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Authentication API",
+      "item": [
+        {
+          "name": "Register User",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"John\",\n  \"lastName\": \"Doe\",\n  \"email\": \"{{userEmail}}\",\n  \"password\": \"Password123!\",\n  \"confirmPassword\": \"Password123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "register"]
+            },
+            "description": "Registers a new user account and triggers OTP dispatch."
+          }
+        },
+        {
+          "name": "Verify OTP (Registration)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.accessToken) {",
+                  "        pm.collectionVariables.set('authToken', jsonData.accessToken);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{userEmail}}\",\n  \"otp\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/verify-otp",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "verify-otp"]
+            },
+            "description": "Verifies registration OTP for email activation."
+          }
+        },
+        {
+          "name": "Resend OTP",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/resend-otp?email={{userEmail}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "resend-otp"],
+              "query": [
+                {
+                  "key": "email",
+                  "value": "{{userEmail}}"
+                }
+              ]
+            },
+            "description": "Resends OTP code to specified email address."
+          }
+        },
+        {
+          "name": "Login User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var jsonData = pm.response.json();",
+                  "    var token = jsonData.accessToken || jsonData.token;",
+                  "    if (token) {",
+                  "        pm.collectionVariables.set('authToken', token);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{userEmail}}\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "login"]
+            },
+            "description": "Authenticates user credentials and sets JWT authentication cookie or payload."
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var jsonData = pm.response.json();",
+                  "    var token = jsonData.accessToken || jsonData.token;",
+                  "    if (token) {",
+                  "        pm.collectionVariables.set('authToken', token);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/refresh-token",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "refresh-token"]
+            },
+            "description": "Refreshes expired access JWT token."
+          }
+        },
+        {
+          "name": "Forgot Password Request",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{userEmail}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/forgot-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "forgot-password"]
+            },
+            "description": "Triggers password reset OTP to user email."
+          }
+        },
+        {
+          "name": "Verify Reset Password OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{userEmail}}\",\n  \"otp\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/verify-reset-otp",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "verify-reset-otp"]
+            },
+            "description": "Verifies OTP code received for password reset."
+          }
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{userEmail}}\",\n  \"newPassword\": \"NewPassword123!\",\n  \"confirmPassword\": \"NewPassword123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/reset-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "reset-password"]
+            },
+            "description": "Resets user password."
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pushToken\": \"sample-push-token\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "logout"]
+            },
+            "description": "Logs out current user session."
+          }
+        },
+        {
+          "name": "Logout All Devices",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/logout-all",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "logout-all"]
+            },
+            "description": "Revokes all active JWT tokens and sessions for user."
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Communities API",
+      "item": [
+        {
+          "name": "Create Community",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201 || pm.response.code === 200) {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.data && jsonData.data.id) {",
+                  "        pm.collectionVariables.set('communityId', jsonData.data.id);",
+                  "    }",
+                  "    if (jsonData.data && jsonData.data.slug) {",
+                  "        pm.collectionVariables.set('communitySlug', jsonData.data.slug);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Tech Innovators Hub\",\n  \"slug\": \"{{communitySlug}}\",\n  \"description\": \"A thriving community for tech enthusiasts and developer builders.\",\n  \"logoUrl\": \"https://example.com/logo.png\",\n  \"coverUrl\": \"https://example.com/cover.png\",\n  \"type\": \"GENERAL\",\n  \"category\": \"TECHNOLOGY\",\n  \"lifecycle\": \"PERMANENT\",\n  \"visibility\": \"PUBLIC\",\n  \"tags\": [\"tech\", \"java\", \"spring\"],\n  \"requiresModeration\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/communities",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "communities"]
+            },
+            "description": "Creates a new community. Assigns current user as OWNER."
+          }
+        },
+        {
+          "name": "List My Communities",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/communities/mine?page=0&size=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "communities", "mine"],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "20" }
+              ]
+            },
+            "description": "Retrieves communities joined or managed by the authenticated user."
+          }
+        },
+        {
+          "name": "Browse / Search Communities",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/communities?query=Tech&type=GENERAL&category=TECHNOLOGY&visibility=PUBLIC&page=0&size=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "communities"],
+              "query": [
+                { "key": "query", "value": "Tech", "disabled": false },
+                { "key": "type", "value": "GENERAL", "disabled": false },
+                { "key": "category", "value": "TECHNOLOGY", "disabled": false },
+                { "key": "visibility", "value": "PUBLIC", "disabled": false },
+                { "key": "tag", "value": "tech", "disabled": true },
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "20" }
+              ]
+            },
+            "description": "Search and filter public communities by text, category, type, visibility, and tags."
+          }
+        },
+        {
+          "name": "Get Trending Communities",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/communities/trending?page=0&size=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "communities", "trending"],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "20" }
+              ]
+            },
+            "description": "Fetches trending communities ranked by activity score."
+          }
+        },
+        {
+          "name": "Get Personal Recommendations",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/communities/recommendations?page=0&size=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "communities", "recommendations"],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "20" }
+              ]
+            },
+            "description": "Fetches personalized community recommendations."
+          }
+        },
+        {
+          "name": "Get Community by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/communities/{{communityId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "communities", "{{communityId}}"]
+            },
+            "description": "Fetches single community details by UUID."
+          }
+        },
+        {
+          "name": "Get Community by Slug",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/communities/slug/{{communitySlug}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "communities", "slug", "{{communitySlug}}"]
+            },
+            "description": "Fetches community details by unique slug string."
+          }
+        },
+        {
+          "name": "Update Community Settings",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Tech Innovators Hub\",\n  \"description\": \"Updated description for tech builders.\",\n  \"logoUrl\": \"https://example.com/new-logo.png\",\n  \"coverUrl\": \"https://example.com/new-cover.png\",\n  \"visibility\": \"PUBLIC\",\n  \"lifecycle\": \"PERMANENT\",\n  \"category\": \"TECHNOLOGY\",\n  \"tags\": [\"tech\", \"java\", \"spring-boot\", \"microservices\"],\n  \"requiresModeration\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/communities/{{communityId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "communities", "{{communityId}}"]
+            },
+            "description": "Edits community metadata (Requires ADMIN or OWNER role)."
+          }
+        },
+        {
+          "name": "Transfer Community Ownership",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/communities/{{communityId}}/transfer-ownership?targetUserId={{targetUserId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "communities", "{{communityId}}", "transfer-ownership"],
+              "query": [
+                { "key": "targetUserId", "value": "{{targetUserId}}" }
+              ]
+            },
+            "description": "Transfers community ownership to another active member (Requires OWNER role)."
+          }
+        },
+        {
+          "name": "Request Community Deletion",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/communities/{{communityId}}/request-deletion",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "communities", "{{communityId}}", "request-deletion"]
+            },
+            "description": "Schedules community deletion in 30 days."
+          }
+        },
+        {
+          "name": "Cancel Community Deletion",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/communities/{{communityId}}/cancel-deletion",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "communities", "{{communityId}}", "cancel-deletion"]
+            },
+            "description": "Cancels pending community deletion schedule."
+          }
+        },
+        {
+          "name": "Archive Community",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/communities/{{communityId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "communities", "{{communityId}}"]
+            },
+            "description": "Archives community (Requires OWNER or Core Admin role)."
+          }
+        },
+        {
+          "name": "Restore Archived Community",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/communities/{{communityId}}/restore",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "communities", "{{communityId}}", "restore"]
+            },
+            "description": "Restores archived community."
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Memberships API",
+      "item": [
+        {
+          "name": "Join Community",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/communities/{{communityId}}/join?inviteToken=",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "communities", "{{communityId}}", "join"],
+              "query": [
+                { "key": "inviteToken", "value": "", "disabled": true }
+              ]
+            },
+            "description": "Joins or sends join request for specified community."
+          }
+        },
+        {
+          "name": "List Community Members",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/communities/{{communityId}}/members?status=ACTIVE&page=0&size=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "communities", "{{communityId}}", "members"],
+              "query": [
+                { "key": "status", "value": "ACTIVE", "disabled": false },
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "20" }
+              ]
+            },
+            "description": "Lists members of community filtered by status (ACTIVE, PENDING_APPROVAL, MUTED, BANNED)."
+          }
+        },
+        {
+          "name": "Approve Join Request",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/communities/{{communityId}}/members/{{targetUserId}}/approve",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "communities", "{{communityId}}", "members", "{{targetUserId}}", "approve"]
+            },
+            "description": "Approves member join request (Requires MODERATOR+ role)."
+          }
+        },
+        {
+          "name": "Reject Join Request",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/communities/{{communityId}}/members/{{targetUserId}}/reject",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "communities", "{{communityId}}", "members", "{{targetUserId}}", "reject"]
+            },
+            "description": "Rejects member join request (Requires MODERATOR+ role)."
+          }
+        },
+        {
+          "name": "Update Member Role or Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"MODERATOR\",\n  \"status\": \"ACTIVE\",\n  \"notificationPref\": \"ALL_NOTIFICATIONS\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/communities/{{communityId}}/members/{{targetUserId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "communities", "{{communityId}}", "members", "{{targetUserId}}"]
+            },
+            "description": "Promotes, demotes, or changes status of member (Requires ADMIN+ role)."
+          }
+        },
+        {
+          "name": "Leave Community",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/communities/{{communityId}}/leave",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "communities", "{{communityId}}", "leave"]
+            },
+            "description": "Leaves community."
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Posts API",
+      "item": [
+        {
+          "name": "Create Post in Community",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201 || pm.response.code === 200) {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.data && jsonData.data.id) {",
+                  "        pm.collectionVariables.set('postId', jsonData.data.id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Welcome to Tech Innovators Hub!\",\n  \"body\": \"This is our inaugural post discussing modern backend architecture and microservices.\",\n  \"type\": \"DISCUSSION\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/communities/{{communityId}}/posts",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "communities", "{{communityId}}", "posts"]
+            },
+            "description": "Creates a new post inside community (Requires MEMBER role)."
+          }
+        },
+        {
+          "name": "Get Community Feed",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/communities/{{communityId}}/posts?page=0&size=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "communities", "{{communityId}}", "posts"],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "20" }
+              ]
+            },
+            "description": "Fetches paginated post feed for community."
+          }
+        },
+        {
+          "name": "Get Single Post Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/posts/{{postId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "posts", "{{postId}}"]
+            },
+            "description": "Fetches single post details by UUID."
+          }
+        },
+        {
+          "name": "Pin / Unpin Post",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/posts/{{postId}}/pin?pin=true",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "posts", "{{postId}}", "pin"],
+              "query": [
+                { "key": "pin", "value": "true" }
+              ]
+            },
+            "description": "Pins or unpins post to top of feed (Requires ADMIN+ role)."
+          }
+        },
+        {
+          "name": "Lock / Unlock Post",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/posts/{{postId}}/lock?lock=true",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "posts", "{{postId}}", "lock"],
+              "query": [
+                { "key": "lock", "value": "true" }
+              ]
+            },
+            "description": "Locks or unlocks post from further comments (Requires MODERATOR+ role)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Comments API",
+      "item": [
+        {
+          "name": "Create Comment on Post",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201 || pm.response.code === 200) {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.data && jsonData.data.id) {",
+                  "        pm.collectionVariables.set('commentId', jsonData.data.id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"body\": \"Great initiative! Excited to collaborate.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/posts/{{postId}}/comments",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "posts", "{{postId}}", "comments"]
+            },
+            "description": "Creates a top-level comment on a post."
+          }
+        },
+        {
+          "name": "Create Nested Reply to Comment",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"body\": \"Thanks! Feel free to reach out if you have any questions.\",\n  \"parentCommentId\": \"{{commentId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/posts/{{postId}}/comments",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "posts", "{{postId}}", "comments"]
+            },
+            "description": "Creates a nested reply to an existing comment using parentCommentId."
+          }
+        },
+        {
+          "name": "Get Post Comments",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/posts/{{postId}}/comments?page=0&size=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "posts", "{{postId}}", "comments"],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "20" }
+              ]
+            },
+            "description": "Fetches paginated comment thread for post."
+          }
+        }
+      ]
+    }
+  ]
+}
