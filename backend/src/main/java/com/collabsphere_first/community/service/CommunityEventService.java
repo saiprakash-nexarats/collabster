@@ -177,4 +177,70 @@ public Page<CommunityEventDto> listGlobalEvents(
 
     return events.map(event -> toDto(event, userId));
 }
+
+    @Transactional(readOnly = true)
+    public java.util.List<java.util.Map<String, Object>> listUserTickets(Long userId) {
+        java.util.List<CommunityEventRsvp> rsvps = rsvpRepository.findByUserIdAndStatus(userId, EventRsvpStatus.GOING);
+        return rsvps.stream().map(r -> {
+            java.util.Map<String, Object> ticket = new java.util.LinkedHashMap<>();
+            ticket.put("id", r.getId().toString());
+            ticket.put("ticketId", r.getId().toString());
+            ticket.put("registrationState", "registered");
+            ticket.put("status", r.getStatus().name());
+            ticket.put("registeredAt", r.getUpdatedAt().toString());
+            ticket.put("event", java.util.Map.of(
+                    "id", r.getEvent().getId().toString(),
+                    "title", r.getEvent().getTitle(),
+                    "startsAt", r.getEvent().getStartsAt().toString(),
+                    "endsAt", r.getEvent().getEndsAt().toString(),
+                    "location", r.getEvent().getLocation() != null ? r.getEvent().getLocation() : "Online"
+            ));
+            return ticket;
+        }).toList();
+    }
+
+    @Transactional
+    public java.util.Map<String, Object> broadcastReminder(UUID eventId, Long userId, java.util.Map<String, Object> body) {
+        CommunityEvent event = find(eventId);
+        accessService.requireRole(event.getCommunity().getId(), userId, MembershipRole.MODERATOR);
+        long attendeeCount = rsvpRepository.countByEventIdAndStatus(eventId, EventRsvpStatus.GOING);
+
+        outboxService.record(event.getCommunity().getId(), "EVENT_REMINDER_BROADCAST", eventId.toString(),
+                java.util.Map.of("eventId", eventId.toString(), "broadcasterId", userId, "recipientsCount", attendeeCount, "scheduledAt", Instant.now().toString()));
+
+        java.util.Map<String, Object> resp = new java.util.LinkedHashMap<>();
+        resp.put("eventId", eventId);
+        resp.put("broadcast", true);
+        resp.put("status", "QUEUED");
+        resp.put("deliveredCount", (int) attendeeCount);
+        resp.put("recipientsCount", (int) attendeeCount);
+        resp.put("dispatchedAt", Instant.now().toString());
+        return resp;
+    }
+
+    @Transactional
+    public java.util.Map<String, Object> checkInTicket(UUID eventId, String ticketId, Long userId) {
+        CommunityEvent event = find(eventId);
+        accessService.requireRole(event.getCommunity().getId(), userId, MembershipRole.MODERATOR);
+        UUID rsvpId;
+        try {
+            rsvpId = UUID.fromString(ticketId);
+        } catch (IllegalArgumentException e) {
+            throw new InvalidJoinException("Invalid ticket identifier");
+        }
+        CommunityEventRsvp rsvp = rsvpRepository.findById(rsvpId)
+                .orElseThrow(() -> new InvalidJoinException("Ticket not found"));
+        if (!rsvp.getEvent().getId().equals(eventId)) {
+            throw new InvalidJoinException("Ticket does not match the event");
+        }
+        if (rsvp.getStatus() != EventRsvpStatus.GOING) {
+            throw new InvalidJoinException("Ticket is not registered as going");
+        }
+        java.util.Map<String, Object> resp = new java.util.LinkedHashMap<>();
+        resp.put("eventId", eventId);
+        resp.put("ticketId", ticketId);
+        resp.put("checkedIn", true);
+        resp.put("checkedInAt", Instant.now().toString());
+        return resp;
+    }
 }

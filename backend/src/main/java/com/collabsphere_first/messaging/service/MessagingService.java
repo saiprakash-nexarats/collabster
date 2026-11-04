@@ -35,4 +35,16 @@ public interface MessagingService {
     void archiveConversation(UUID conversationId, Long currentUserId, boolean archive);
 
     AttachmentSignedUrlResponse getAttachmentSignedUrl(UUID conversationId, UUID attachmentId, Long currentUserId);
+
+    void starMessage(UUID conversationId, UUID messageId, Long currentUserId);
+
+    void unstarMessage(UUID conversationId, UUID messageId, Long currentUserId);
+
+    java.util.List<java.util.Map<String, Object>> getStarredMessages(Long currentUserId);
+
+    java.util.List<java.util.Map<String, Object>> getConversationMembers(UUID conversationId, Long currentUserId);
+
+    void addConversationMember(UUID conversationId, Long currentUserId, Long profileId);
+
+    void removeConversationMember(UUID conversationId, Long currentUserId, Long profileId);
 }

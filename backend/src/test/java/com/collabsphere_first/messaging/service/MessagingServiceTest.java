@@ -43,6 +43,7 @@ class MessagingServiceTest {
     @Mock private MessageReactionRepository reactionRepository;
     @Mock private MessageReceiptRepository receiptRepository;
     @Mock private UserRepository userRepository;
+    @Mock private StarredMessageRepository starredMessageRepository;
 
     @Mock private MessagingAccessService accessService;
     @Mock private MessagingRealtimePublisher realtimePublisher;
@@ -75,6 +76,7 @@ class MessagingServiceTest {
                 reactionRepository,
                 receiptRepository,
                 userRepository,
+                starredMessageRepository,
                 accessService,
                 realtimePublisher,
                 attachmentService,

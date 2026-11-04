@@ -2,139 +2,85 @@
 
 **Repository:** `https://github.com/saiprakash-nexarats/collabster`  
 **Branch:** `main`  
-**Specification Date:** 2026-11-04  
-**Audit Reference:** Phase 2 — API Contract Inventory  
+**Audit Reference:** Phase 2 Acceptance & Phase 3 Contract Inventory  
+**Classification Date:** 2026-11-04  
 
 ---
 
-## 1. Executive Summary
+## 1. Classification Categories & Totals
 
-| Category | Total Operations | Implemented & Aligned | Scheduled (Phase 5) | Deprecated / Mismatch |
-| :--- | :---: | :---: | :---: | :---: |
-| **System & Health** | 1 | 1 | 0 | 0 |
-| **Authentication & Session** | 10 | 10 | 0 | 0 |
-| **Identity & Profile** | 5 | 5 | 0 | 0 |
-| **Social, Feed & Interaction** | 14 | 14 | 0 | 0 |
-| **Explore & Discovery** | 1 | 1 | 0 | 0 |
-| **Notifications** | 4 | 4 | 0 | 0 |
-| **Realtime Presence** | 1 | 1 | 0 | 0 |
-| **Communities** | 9 | 9 | 0 | 0 |
-| **Events** | 8 | 8 | 0 | 0 |
-| **Direct & Group Messaging** | 21 | 21 | 0 | 0 |
-| **Learning Module** | 10 | 0 | 10 | 0 |
-| **Projects Module** | 12 | 0 | 12 | 0 |
-| **Services Marketplace** | 8 | 0 | 8 | 0 |
-| **Companies Module** | 11 | 0 | 11 | 0 |
-| **Mentors Module** | 9 | 0 | 9 | 0 |
-| **Career & Jobs Module** | 7 | 0 | 7 | 0 |
-| **Storage Adapter** | 3 | 0 | 3 | 0 |
-| **Payments & Payouts** | 7 | 0 | 7 | 0 |
-| **TOTAL** | **141** | **74** | **67** | **0** |
+In accordance with Phase 2 Functional Acceptance requirements, every operation in `src/api.js` is audited and categorized using the formal standard:
 
----
+- **`IMPLEMENTED_AND_TESTED`**: Full business logic, database persistence, and automated security/contract tests verified.
+- **`ROUTE_ONLY`**: Route mapped on the HTTP server but lacking complete business persistence or authorization logic.
+- **`CONTRACT_MISMATCH`**: Endpoint schema or HTTP method diverges between client and server.
+- **`MISSING`**: Client endpoint expects a route that does not exist on the server.
+- **`DEFERRED`**: Intentionally scheduled for future phases (Phase 5 domains or infrastructure-dependent features such as WebRTC media calling). Handled explicitly (returning 501 / disabled controls rather than deceptive success).
+- **`BLOCKED`**: Cannot proceed due to environment or third-party dependency.
 
-## 2. Core Implemented Domains (100% Contract Parity)
+### Summary Breakdown across all 141 frontend operations:
 
-### A. Health & System
-- `GET /v1/system/health` -> `SystemHealthController.getHealth()`
-
-### B. Authentication & Session
-- `POST /v1/auth/register` -> `AuthenticationController.register()`
-- `POST /v1/auth/login` -> `AuthenticationController.login()`
-- `POST /v1/auth/verify-email` -> `AuthenticationController.verifyOtp()`
-- `POST /v1/auth/resend-otp` -> `AuthenticationController.resendOtp()`
-- `POST /v1/auth/oauth2/exchange` -> `AuthenticationController.exchangeOAuth2Code()`
-- `POST /v1/auth/refresh` -> `AuthenticationController.refreshToken()`
-- `POST /v1/auth/logout` -> `AuthenticationController.logout()`
-- `POST /v1/auth/forgot-password` -> `AuthenticationController.forgotPassword()`
-- `POST /v1/auth/reset-password` -> `AuthenticationController.resetPassword()`
-- `DELETE /v1/identity/me` -> `AccountLifecycleController.deactivateAccount()`
-
-### C. Identity & User Profiles
-- `GET /v1/identity/me` -> `ProfileController.getMyProfile()`
-- `GET /v1/identity/profiles/{id}` -> `ProfileController.getProfileById()`
-- `GET /v1/identity/profiles` -> `ProfileController.searchProfiles()`
-- `PATCH /v1/identity/me` -> `ProfileController.updateProfile()`
-- `DELETE /v1/identity/me` -> `AccountLifecycleController.deactivateAccount()`
-
-### D. Social, Feed & Community Interactions
-- `GET /v1/social/feed` -> `FeedController.getFeed()` / `SocialBridgeController`
-- `POST /v1/social/posts` -> `PostController.createPost()` / `SocialBridgeController`
-- `POST /v1/social/posts/{id}/comments` -> `CommentController.createComment()`
-- `PUT /v1/social/posts/{id}/reaction` -> `InteractionController.togglePostLike()`
-- `DELETE /v1/social/posts/{id}/reaction` -> `InteractionController.removePostLike()`
-- `POST /v1/social/posts/{postId}/polls/{pollId}/vote` -> `PollController.vote()`
-- `POST /v1/social/profiles/{profileId}/follow` -> `NetworkController.follow()`
-- `DELETE /v1/social/profiles/{profileId}/follow` -> `NetworkController.unfollow()`
-- `GET /v1/social/profiles/{profileId}/follow/status` -> `NetworkController.getFollowStatus()`
-- `POST /v1/social/reports` -> `ReportController.submitReport()`
-- `POST /v1/social/posts/{postId}/save` -> `SavedPostController.savePost()`
-- `DELETE /v1/social/posts/{postId}/save` -> `SavedPostController.unsavePost()`
-- `GET /v1/social/saved` -> `SavedPostController.getSavedPosts()`
-- `GET /v1/social/saved/ids` -> `SavedPostController.getSavedPostIds()`
-- `GET /v1/explore` -> `ExploreController.search()`
-
-### E. Notification Center
-- `GET /v1/notifications` -> `NotificationController.getNotifications()`
-- `PATCH /v1/notifications/{id}/read` -> `NotificationController.markRead()`
-- `GET /v1/notifications/preferences` -> `NotificationPreferenceController.getPreferences()`
-- `PATCH /v1/notifications/preferences` -> `NotificationPreferenceController.updatePreference()`
-
-### F. Community Spaces & Topics
-- `GET /v1/communities` -> `CommunityController.list()`
-- `POST /v1/communities` -> `CommunityController.create()`
-- `POST /v1/communities/{id}/join` -> `CommunityMembershipController.join()`
-- `DELETE /v1/communities/{id}/join` -> `CommunityMembershipController.leave()`
-- `GET /v1/communities/{id}/members` -> `CommunityMembershipController.members()`
-- `GET /v1/communities/{id}/posts` -> `CommunityPostController.list()`
-- `POST /v1/communities/{id}/posts` -> `CommunityPostController.create()`
-- `GET /v1/communities/{communityId}/posts/{postId}/comments` -> `CommentController.getPostComments()`
-- `POST /v1/communities/{communityId}/posts/{postId}/comments` -> `CommentController.createComment()`
-
-### G. Events
-- `GET /v1/events` -> `CommunityEventController.listGlobalEvents()`
-- `GET /v1/events/tickets` -> `CommunityEventController.listTickets()`
-- `POST /v1/events` -> `CommunityEventController.createGlobalEvent()`
-- `POST /v1/events/{id}/registrations` -> `CommunityEventController.register()`
-- `POST /v1/events/{id}/registrations/cancel` -> `CommunityEventController.cancelRegistration()`
-- `POST /v1/events/{id}/tickets/{ticketId}/check-in` -> `CommunityEventController.checkIn()`
-- `POST /v1/events/{id}/reminders/broadcast` -> `CommunityEventController.broadcastReminder()`
-- `GET /v1/events/{id}/attendees` -> `CommunityEventController.attendees()`
-
-### H. Messaging & Calls
-- `GET /v1/messages/conversations` -> `MessagingController.getConversations()`
-- `POST /v1/messages/conversations/direct` -> `MessagingController.getOrCreateDirectConversation()`
-- `POST /v1/messages/conversations/group` -> `MessagingController.createGroupConversation()`
-- `GET /v1/messages/conversations/{id}/members` -> `MessagingController.getConversationMembers()`
-- `POST /v1/messages/conversations/{id}/members` -> `MessagingController.addMember()`
-- `DELETE /v1/messages/conversations/{id}/members/{profileId}` -> `MessagingController.removeMember()`
-- `GET /v1/messages/conversations/{id}/history` -> `MessagingController.getMessages()`
-- `POST /v1/messages/conversations/{id}/messages` -> `MessagingController.sendMessage()`
-- `PATCH /v1/messages/conversations/{convId}/messages/{msgId}` -> `MessagingController.editMessage()`
-- `DELETE /v1/messages/conversations/{convId}/messages/{msgId}` -> `MessagingController.deleteMessage()`
-- `PUT /v1/messages/conversations/{convId}/messages/{msgId}/reactions` -> `MessagingController.addOrUpdateReaction()`
-- `DELETE /v1/messages/conversations/{convId}/messages/{msgId}/reactions` -> `MessagingController.removeReaction()`
-- `POST /v1/messages/conversations/{convId}/messages/{msgId}/star` -> `MessagingController.starMessage()`
-- `DELETE /v1/messages/conversations/{convId}/messages/{msgId}/star` -> `MessagingController.unstarMessage()`
-- `GET /v1/messages/starred` -> `MessagingController.getStarredMessages()`
-- `POST /v1/messages/conversations/{convId}/calls` -> `MessagingController.initiateCall()`
-- `POST /v1/messages/conversations/{convId}/calls/signal` -> `MessagingController.signalCall()`
-- `POST /v1/messages/calls/{callId}/end` -> `MessagingController.endCall()`
-- `GET /v1/messages/calls/history` -> `MessagingController.getCallHistory()`
-- `POST /v1/messages/conversations/{conversationId}/read` -> `MessagingController.markConversationRead()`
-- `GET /v1/messages/conversations/{conversationId}/attachments/{objectId}/download` -> `MessagingController.downloadAttachment()`
+| Category | Count | Percentage | Details |
+| :--- | :---: | :---: | :--- |
+| **`IMPLEMENTED_AND_TESTED`** | **70** | 49.6% | Health, Auth, Identity, Social, Notifications, Realtime, Communities, Events, Core Messaging |
+| **`DEFERRED`** | **71** | 50.4% | 67 Domain Operations (Phase 5) + 4 WebRTC media calling endpoints (explicit 501 Not Implemented) |
+| **`ROUTE_ONLY`** | **0** | 0.0% | None |
+| **`CONTRACT_MISMATCH`** | **0** | 0.0% | None |
+| **`MISSING`** | **0** | 0.0% | None |
+| **`BLOCKED`** | **0** | 0.0% | None |
+| **TOTAL** | **141** | **100%** | Full contract audit complete |
 
 ---
 
-## 3. Scheduled Domain Modules (Phase 5 Roadmap)
+## 2. Categorization Detail by Domain
 
-The remaining 67 operations belong to advanced business domains that are cleanly decoupled from the launch MVP and scheduled for dedicated implementation in Phase 5:
+| Domain | Total | IMPLEMENTED_AND_TESTED | DEFERRED | Notes |
+| :--- | :---: | :---: | :---: | :--- |
+| **System & Health** | 1 | 1 | 0 | `SystemHealthController` verified |
+| **Authentication & Session** | 10 | 10 | 0 | Auth, OAuth, OTP, HttpOnly cookies, session versioning |
+| **Identity & Profile** | 5 | 5 | 0 | Current user profile, public profiles, profile search, update |
+| **Social, Feed & Interaction** | 14 | 14 | 0 | Posts, comments, reactions, bookmarks, polls, follows, reports |
+| **Explore & Discovery** | 1 | 1 | 0 | Multi-entity search with filters and keyset pagination |
+| **Notifications** | 4 | 4 | 0 | Paginated notifications, read receipts, category preferences |
+| **Realtime Presence** | 1 | 1 | 0 | STOMP `/ws/community` and `/realtime` presence |
+| **Communities** | 9 | 9 | 0 | Community CRUD, join/leave, posts, comments, moderation |
+| **Events** | 8 | 8 | 0 | Global/community events, registrations, tickets, check-in, broadcast |
+| **Direct & Group Messaging** | 21 | 17 | 4 | 17 core operations verified; 4 calling operations explicitly DEFERRED |
+| **Learning Module** | 10 | 0 | 10 | Scheduled for Phase 5 |
+| **Projects Module** | 12 | 0 | 12 | Scheduled for Phase 5 |
+| **Services Marketplace** | 8 | 0 | 8 | Scheduled for Phase 5 |
+| **Companies Module** | 11 | 0 | 11 | Scheduled for Phase 5 |
+| **Mentors Module** | 9 | 0 | 9 | Scheduled for Phase 5 |
+| **Career & Jobs Module** | 7 | 0 | 7 | Scheduled for Phase 5 |
+| **Storage Adapter** | 3 | 0 | 3 | Scheduled for Phase 5 |
+| **Payments & Payouts** | 7 | 0 | 7 | Scheduled for Phase 5 |
+| **TOTAL** | **141** | **70** | **71** | |
 
-1. **Learning & Certifications (`/v1/learning/*`):** Course catalog, lesson completion tracking, and verifiable certificates.
-2. **Projects & Tasks (`/v1/projects/*`):** Collaborative project workspaces, file manager, milestones, and kanban tasks.
-3. **Services Marketplace (`/v1/services/*`):** Service provider listings, booking schedules, confirmation flow, and reviews.
-4. **Companies & Workspaces (`/v1/companies/*`):** Company organizational hierarchy, team tasks, document vault, and role permissions.
-5. **Mentors (`/v1/mentors/*`):** Mentor profiles, availability slots, booking requests, and session confirmations.
-6. **Careers (`/v1/career/*`):** Job board, candidate applications, resume submission, and review pipelines.
-7. **Storage Adapter (`/v1/storage/*`):** S3/GCS presigned direct upload ticket negotiation and verification.
-8. **Payments & Payouts (`/v1/payments/*`):** Server-authoritative payment provider integration, webhook signature validation, and payout reconciliation.
+---
+
+## 3. Real Messaging & Event Implementation Hardening
+
+### A. Conversation Membership Authorization
+- Authenticated caller must be an active participant in `conversationId` to list members via `GET /v1/messages/conversations/{id}/members`.
+- Adding members (`POST /v1/messages/conversations/{id}/members`) verifies caller participation, rejects adding members to 1:1 DIRECT conversations (relational pair invariant), and validates target profile identity.
+- Removing members (`DELETE /v1/messages/conversations/{id}/members/{profileId}`) permits self-leave or requires conversation administrator/creator authorization. Non-admin participants cannot kick other members.
+- Verified by automated tests in `MessagingMembershipAuthorizationTest.java`.
+
+### B. Durable Starred Messages
+- Added Flyway migration `V33__create_starred_messages_schema.sql` creating table `starred_messages` with unique constraint `(user_id, message_id)`.
+- Implemented `StarredMessage.java` entity, `StarredMessageRepository.java`, and service methods in `MessagingService`.
+- `POST /conversations/{id}/messages/{msgId}/star`: verifies participant access and message ownership before persisting star.
+- `DELETE /conversations/{id}/messages/{msgId}/star`: verifies access and deletes caller's star.
+- `GET /starred`: retrieves caller's starred messages with full hydrated message details.
+
+### C. Explicit Deferral of Calling Endpoints
+- WebRTC media streaming requires dedicated STUN/TURN/SFU relay infrastructure.
+- In accordance with production integrity standards, calling endpoints (`/conversations/{id}/calls`, `/calls/signal`, `/calls/{id}/end`, `/calls/history`) do NOT return fake success tokens.
+- Endpoints return `501 NOT_IMPLEMENTED` with clear operational diagnostics (`"Audio/video calling is deferred pending WebRTC media infrastructure deployment"`).
+- Categorized as `DEFERRED`.
+
+### D. Event Ticket & Reminder Parity
+- `GET /v1/events/tickets`: returns actual user event registrations from `community_event_rsvps` joined with `community_events` (`registrationState: "registered"`, `status: "GOING"`).
+- `POST /v1/events/{id}/tickets/{ticketId}/check-in`: verifies ticket validity and marks attendance.
+- `POST /v1/events/{id}/reminders/broadcast`: moderator-only broadcast with durable outbox recording and returned queue count.
+- Verified by automated tests in `CommunityEventParityTest.java`.

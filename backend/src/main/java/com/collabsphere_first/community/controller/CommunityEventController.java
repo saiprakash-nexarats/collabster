@@ -67,7 +67,8 @@ public class CommunityEventController {
 
     @GetMapping({"/api/v1/events/tickets", "/v1/events/tickets"})
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> listTickets() {
-        return ResponseEntity.ok(ApiResponse.success(Collections.emptyList()));
+        Long currentUserId = currentUserService.getCurrentUser().getId();
+        return ResponseEntity.ok(ApiResponse.success("Tickets retrieved successfully", eventService.listUserTickets(currentUserId)));
     }
 
     @GetMapping({"/api/v1/events/{eventId}", "/v1/events/{eventId}"})
@@ -96,12 +97,8 @@ public class CommunityEventController {
 
     @PostMapping({"/api/v1/events/{eventId}/tickets/{ticketId}/check-in", "/v1/events/{eventId}/tickets/{ticketId}/check-in"})
     public ResponseEntity<Map<String, Object>> checkIn(@PathVariable UUID eventId, @PathVariable String ticketId) {
-        Map<String, Object> resp = new LinkedHashMap<>();
-        resp.put("eventId", eventId);
-        resp.put("ticketId", ticketId);
-        resp.put("checkedIn", true);
-        resp.put("checkedInAt", Instant.now().toString());
-        return ResponseEntity.ok(resp);
+        Long currentUserId = currentUserService.getCurrentUser().getId();
+        return ResponseEntity.ok(eventService.checkInTicket(eventId, ticketId, currentUserId));
     }
 
     @GetMapping({"/api/v1/events/{eventId}/attendees", "/v1/events/{eventId}/attendees"})
@@ -113,10 +110,8 @@ public class CommunityEventController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> broadcastReminder(
             @PathVariable UUID eventId,
             @RequestBody(required = false) Map<String, Object> body) {
-        Map<String, Object> resp = new LinkedHashMap<>();
-        resp.put("eventId", eventId);
-        resp.put("broadcast", true);
-        resp.put("dispatchedAt", Instant.now().toString());
-        return ResponseEntity.ok(ApiResponse.success("Reminder broadcast dispatched successfully", resp));
+        Long currentUserId = currentUserService.getCurrentUser().getId();
+        return ResponseEntity.ok(ApiResponse.success("Reminder broadcast dispatched successfully",
+                eventService.broadcastReminder(eventId, currentUserId, body)));
     }
 }

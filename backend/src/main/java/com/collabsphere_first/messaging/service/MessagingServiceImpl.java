@@ -44,6 +44,7 @@ public class MessagingServiceImpl implements MessagingService {
     private final MessageReactionRepository reactionRepository;
     private final MessageReceiptRepository receiptRepository;
     private final UserRepository userRepository;
+    private final StarredMessageRepository starredMessageRepository;
 
     private final MessagingAccessService accessService;
     private final MessagingRealtimePublisher realtimePublisher;
@@ -849,5 +850,118 @@ public class MessagingServiceImpl implements MessagingService {
             return MessageDeliveryState.DELIVERED;
         }
         return MessageDeliveryState.SENT;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> getConversationMembers(UUID conversationId, Long currentUserId) {
+        accessService.requireParticipant(conversationId, currentUserId);
+        List<ConversationParticipant> participants = participantRepository.findByConversationIdWithUser(conversationId);
+        return participants.stream().map(p -> {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("userId", p.getUser().getId());
+            map.put("email", p.getUser().getEmail());
+            map.put("joinedAt", p.getJoinedAt());
+            return map;
+        }).toList();
+    }
+
+    @Override
+    @Transactional
+    public void addConversationMember(UUID conversationId, Long currentUserId, Long profileId) {
+        Conversation conv = accessService.requireParticipant(conversationId, currentUserId);
+        if (conv.getType() == ConversationType.DIRECT) {
+            throw new IllegalArgumentException("Cannot add members to a 1:1 direct conversation. Please create a group conversation instead.");
+        }
+        if (profileId == null) {
+            throw new IllegalArgumentException("profileId is required");
+        }
+        User targetUser = userRepository.findById(profileId)
+                .orElseThrow(() -> new IllegalArgumentException("Target user does not exist: " + profileId));
+
+        if (participantRepository.existsByIdConversationIdAndIdUserId(conversationId, profileId)) {
+            return;
+        }
+
+        ConversationParticipant newParticipant = ConversationParticipant.builder()
+                .id(new ConversationParticipantId(conversationId, profileId))
+                .conversation(conv)
+                .user(targetUser)
+                .joinedAt(Instant.now())
+                .build();
+        participantRepository.save(newParticipant);
+    }
+
+    @Override
+    @Transactional
+    public void removeConversationMember(UUID conversationId, Long currentUserId, Long profileId) {
+        accessService.requireParticipant(conversationId, currentUserId);
+        if (profileId == null) {
+            throw new IllegalArgumentException("profileId is required");
+        }
+        boolean isSelf = currentUserId.equals(profileId);
+        if (!isSelf) {
+            List<ConversationParticipant> parts = participantRepository.findByIdConversationId(conversationId);
+            if (parts.isEmpty()) {
+                throw new ConversationNotFoundException(conversationId);
+            }
+            boolean targetIsParticipant = parts.stream().anyMatch(p -> p.getId().getUserId().equals(profileId));
+            if (!targetIsParticipant) {
+                throw new IllegalArgumentException("Target user is not a participant in this conversation");
+            }
+            Long adminId = parts.stream()
+                    .min(Comparator.comparing(ConversationParticipant::getJoinedAt))
+                    .map(p -> p.getId().getUserId())
+                    .orElse(null);
+            if (!currentUserId.equals(adminId)) {
+                throw new MessagingAccessDeniedException("You are not authorized to remove other members from this conversation");
+            }
+        }
+        participantRepository.deleteById(new ConversationParticipantId(conversationId, profileId));
+    }
+
+    @Override
+    @Transactional
+    public void starMessage(UUID conversationId, UUID messageId, Long currentUserId) {
+        accessService.requireParticipant(conversationId, currentUserId);
+        DirectMessage msg = messageRepository.findById(messageId)
+                .orElseThrow(() -> new MessageNotFoundException(messageId));
+        if (!msg.getConversationId().equals(conversationId)) {
+            throw new IllegalArgumentException("Message does not belong to conversation: " + conversationId);
+        }
+        if (!starredMessageRepository.existsByUserIdAndMessageId(currentUserId, messageId)) {
+            User user = userRepository.getReferenceById(currentUserId);
+            StarredMessage starred = StarredMessage.builder()
+                    .conversationId(conversationId)
+                    .message(msg)
+                    .user(user)
+                    .starredAt(Instant.now())
+                    .build();
+            starredMessageRepository.save(starred);
+        }
+    }
+
+    @Override
+    @Transactional
+    public void unstarMessage(UUID conversationId, UUID messageId, Long currentUserId) {
+        accessService.requireParticipant(conversationId, currentUserId);
+        starredMessageRepository.deleteByUserIdAndMessageId(currentUserId, messageId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> getStarredMessages(Long currentUserId) {
+        List<StarredMessage> starred = starredMessageRepository.findByUserIdWithMessages(currentUserId);
+        return starred.stream().map(sm -> {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("id", sm.getId().toString());
+            map.put("messageId", sm.getMessage().getId().toString());
+            map.put("conversationId", sm.getConversationId().toString());
+            map.put("senderId", sm.getMessage().getSenderId());
+            map.put("body", sm.getMessage().getBody());
+            map.put("starredAt", sm.getStarredAt().toString());
+            map.put("createdAt", sm.getMessage().getCreatedAt().toString());
+            return map;
+        }).toList();
     }
 }

@@ -10,6 +10,7 @@ public interface CommunityEventRsvpRepository extends JpaRepository<CommunityEve
     Optional<CommunityEventRsvp> findByEventIdAndUserId(UUID eventId, Long userId);
     Page<CommunityEventRsvp> findByEventIdAndStatusOrderByUpdatedAtDesc(UUID eventId, EventRsvpStatus status, Pageable pageable);
     long countByEventIdAndStatus(UUID eventId, EventRsvpStatus status);
+    java.util.List<CommunityEventRsvp> findByUserIdAndStatus(Long userId, EventRsvpStatus status);
     long countByEvent_Community_IdAndUpdatedAtBetween(UUID communityId, java.time.Instant from, java.time.Instant to);
     java.util.List<CommunityEventRsvp> findByEvent_Community_IdAndUpdatedAtBetween(UUID communityId, java.time.Instant from, java.time.Instant to);
 }
