@@ -1,0 +1,142 @@
+Domain,MethodName,HttpMethod,FrontendPath,BackendEndpoint,Status,TestId,Notes
+Health,health,GET,/v1/system/health,/v1/system/health,Implemented,TEST-SYS-001,SystemHealthController verified
+Auth,auth.register,POST,/v1/auth/register,/v1/auth/register,Implemented,TEST-AUTH-001,Registration with OTP email dispatch
+Auth,auth.login,POST,/v1/auth/login,/v1/auth/login,Implemented,TEST-AUTH-002,Authentication and JWT issuance
+Auth,auth.verifyEmail,POST,/v1/auth/verify-email,/v1/auth/verify-email,Implemented,TEST-AUTH-003,Email OTP verification
+Auth,auth.resendOtp,POST,/v1/auth/resend-otp,/v1/auth/resend-otp,Implemented,TEST-AUTH-004,Resend verification OTP
+Auth,auth.oauthExchange,POST,/v1/auth/oauth2/exchange,/v1/auth/oauth2/exchange,Implemented,TEST-AUTH-005,Redis-backed single-use code exchange
+Auth,auth.refresh,POST,/v1/auth/refresh,/v1/auth/refresh,Implemented,TEST-AUTH-006,HttpOnly cookie refresh token rotation
+Auth,auth.logout,POST,/v1/auth/logout,/v1/auth/logout,Implemented,TEST-AUTH-007,Single-device session revocation
+Auth,auth.forgotPassword,POST,/v1/auth/forgot-password,/v1/auth/forgot-password,Implemented,TEST-AUTH-008,Password recovery workflow
+Auth,auth.resetPassword,POST,/v1/auth/reset-password,/v1/auth/reset-password,Implemented,TEST-AUTH-009,Password reset confirmation
+Auth,auth.deleteAccount,DELETE,/v1/identity/me,/v1/identity/me,Implemented,TEST-AUTH-010,Account-wide session revocation
+Identity,identity.me,GET,/v1/identity/me,/v1/identity/me,Implemented,TEST-ID-001,Current user profile resolution
+Identity,identity.profile,GET,/v1/identity/profiles/{id},/v1/identity/profiles/{id},Implemented,TEST-ID-002,Public profile retrieval
+Identity,identity.searchProfiles,GET,/v1/identity/profiles,/v1/identity/profiles,Implemented,TEST-ID-003,Profile search with limit
+Identity,identity.update,PATCH,/v1/identity/me,/v1/identity/me,Implemented,TEST-ID-004,Current user profile update
+Identity,identity.deleteMe,DELETE,/v1/identity/me,/v1/identity/me,Implemented,TEST-ID-005,Account lifecycle self-deletion
+Social,social.feed,GET,/v1/social/feed,/v1/social/feed,Implemented,TEST-SOC-001,Ranked feed retrieval with cursor
+Social,social.createPost,POST,/v1/social/posts,/v1/social/posts,Implemented,TEST-SOC-002,Post creation with moderation
+Social,social.createComment,POST,/v1/social/posts/{id}/comments,/v1/social/posts/{id}/comments,Implemented,TEST-SOC-003,Comment thread participation
+Social,social.setReaction,PUT,/v1/social/posts/{id}/reaction,/v1/social/posts/{id}/reaction,Implemented,TEST-SOC-004,Post reaction toggle
+Social,social.removeReaction,DELETE,/v1/social/posts/{id}/reaction,/v1/social/posts/{id}/reaction,Implemented,TEST-SOC-005,Post reaction deletion
+Social,social.votePoll,POST,/v1/social/posts/{postId}/polls/{pollId}/vote,/v1/social/posts/{postId}/polls/{pollId}/vote,Implemented,TEST-SOC-006,Poll voting
+Social,social.follow,POST,/v1/social/profiles/{profileId}/follow,/v1/social/profiles/{profileId}/follow,Implemented,TEST-SOC-007,Follow user
+Social,social.unfollow,DELETE,/v1/social/profiles/{profileId}/follow,/v1/social/profiles/{profileId}/follow,Implemented,TEST-SOC-008,Unfollow user
+Social,social.followStatus,GET,/v1/social/profiles/{profileId}/follow/status,/v1/social/profiles/{profileId}/follow/status,Implemented,TEST-SOC-009,Follow status check
+Social,social.report,POST,/v1/social/reports,/v1/social/reports,Implemented,TEST-SOC-010,Content moderation reporting
+Social,social.savePost,POST,/v1/social/posts/{postId}/save,/v1/social/posts/{postId}/save,Implemented,TEST-SOC-011,Bookmark post
+Social,social.unsavePost,DELETE,/v1/social/posts/{postId}/save,/v1/social/posts/{postId}/save,Implemented,TEST-SOC-012,Remove bookmark
+Social,social.saved,GET,/v1/social/saved,/v1/social/saved,Implemented,TEST-SOC-013,List saved bookmarks
+Social,social.savedIds,GET,/v1/social/saved/ids,/v1/social/saved/ids,Implemented,TEST-SOC-014,List saved post IDs
+Explore,explore.search,GET,/v1/explore,/v1/explore,Implemented,TEST-EXP-001,Global search with cursor and type filter
+Notifications,notifications.page,GET,/v1/notifications,/v1/notifications,Implemented,TEST-NOTIF-001,Notification center paginated list
+Notifications,notifications.markRead,PATCH,/v1/notifications/{id}/read,/v1/notifications/{id}/read,Implemented,TEST-NOTIF-002,Single notification read receipt
+Notifications,notifications.preferences,GET,/v1/notifications/preferences,/v1/notifications/preferences,Implemented,TEST-NOTIF-003,Notification category preferences
+Notifications,notifications.updatePreferences,PATCH,/v1/notifications/preferences,/v1/notifications/preferences,Implemented,TEST-NOTIF-004,Update notification preference channel
+Realtime,realtime.presence,GET,/v1/realtime/presence,/v1/realtime/presence,Implemented,TEST-RT-001,Multi-user presence query
+Communities,communities.list,GET,/v1/communities,/v1/communities,Implemented,TEST-COM-001,List public and joined communities
+Communities,communities.create,POST,/v1/communities,/v1/communities,Implemented,TEST-COM-002,Create new community space
+Communities,communities.join,POST,/v1/communities/{id}/join,/v1/communities/{id}/join,Implemented,TEST-COM-003,Join community or submit request
+Communities,communities.leave,DELETE,/v1/communities/{id}/join,/v1/communities/{id}/join,Implemented,TEST-COM-004,Leave community space
+Communities,communities.members,GET,/v1/communities/{id}/members,/v1/communities/{id}/members,Implemented,TEST-COM-005,List community membership
+Communities,communities.posts,GET,/v1/communities/{id}/posts,/v1/communities/{id}/posts,Implemented,TEST-COM-006,List community channel posts
+Communities,communities.createPost,POST,/v1/communities/{id}/posts,/v1/communities/{id}/posts,Implemented,TEST-COM-007,Create post in community
+Communities,communities.comments,GET,/v1/communities/{communityId}/posts/{postId}/comments,/v1/communities/{communityId}/posts/{postId}/comments,Implemented,TEST-COM-008,Get community post comments
+Communities,communities.createComment,POST,/v1/communities/{communityId}/posts/{postId}/comments,/v1/communities/{communityId}/posts/{postId}/comments,Implemented,TEST-COM-009,Comment on community post
+Events,events.list,GET,/v1/events,/v1/events,Implemented,TEST-EVT-001,List global events with time bounds
+Events,events.tickets,GET,/v1/events/tickets,/v1/events/tickets,Implemented,TEST-EVT-002,User event tickets list
+Events,events.create,POST,/v1/events,/v1/events,Implemented,TEST-EVT-003,Global event creation (community-scoped)
+Events,events.register,POST,/v1/events/{id}/registrations,/v1/events/{id}/registrations,Implemented,TEST-EVT-004,Event RSVP and registration
+Events,events.cancelRegistration,POST,/v1/events/{id}/registrations/cancel,/v1/events/{id}/registrations/cancel,Implemented,TEST-EVT-005,Event RSVP cancellation
+Events,events.checkIn,POST,/v1/events/{id}/tickets/{ticketId}/check-in,/v1/events/{id}/tickets/{ticketId}/check-in,Implemented,TEST-EVT-006,Event ticket check-in
+Events,events.broadcastReminder,POST,/v1/events/{id}/reminders/broadcast,/v1/events/{id}/reminders/broadcast,Implemented,TEST-EVT-007,Organizer event reminder broadcast
+Events,events.attendees,GET,/v1/events/{id}/attendees,/v1/events/{id}/attendees,Implemented,TEST-EVT-008,List verified event attendees
+Messages,messages.conversations,GET,/v1/messages/conversations,/v1/messages/conversations,Implemented,TEST-MSG-001,User conversation list
+Messages,messages.createDirect,POST,/v1/messages/conversations/direct,/v1/messages/conversations/direct,Implemented,TEST-MSG-002,1:1 direct conversation retrieval/creation
+Messages,messages.createGroup,POST,/v1/messages/conversations/group,/v1/messages/conversations/group,Implemented,TEST-MSG-003,Group conversation creation
+Messages,messages.members,GET,/v1/messages/conversations/{id}/members,/v1/messages/conversations/{id}/members,Implemented,TEST-MSG-004,Conversation participants list
+Messages,messages.addMember,POST,/v1/messages/conversations/{id}/members,/v1/messages/conversations/{id}/members,Implemented,TEST-MSG-005,Add participant to conversation
+Messages,messages.removeMember,DELETE,/v1/messages/conversations/{id}/members/{profileId},/v1/messages/conversations/{id}/members/{profileId},Implemented,TEST-MSG-006,Remove participant from conversation
+Messages,messages.history,GET,/v1/messages/conversations/{id}/history,/v1/messages/conversations/{id}/history,Implemented,TEST-MSG-007,Message history with cursor
+Messages,messages.send,POST,/v1/messages/conversations/{id}/messages,/v1/messages/conversations/{id}/messages,Implemented,TEST-MSG-008,Send encrypted message
+Messages,messages.editMessage,PATCH,/v1/messages/conversations/{convId}/messages/{msgId},/v1/messages/conversations/{convId}/messages/{msgId},Implemented,TEST-MSG-009,Edit sent message within window
+Messages,messages.deleteMessage,DELETE,/v1/messages/conversations/{convId}/messages/{msgId},/v1/messages/conversations/{convId}/messages/{msgId},Implemented,TEST-MSG-010,Tombstone message deletion
+Messages,messages.react,PUT,/v1/messages/conversations/{convId}/messages/{msgId}/reactions,/v1/messages/conversations/{convId}/messages/{msgId}/reactions,Implemented,TEST-MSG-011,Message emoji reaction
+Messages,messages.removeReaction,DELETE,/v1/messages/conversations/{convId}/messages/{msgId}/reactions,/v1/messages/conversations/{convId}/messages/{msgId}/reactions,Implemented,TEST-MSG-012,Remove emoji reaction
+Messages,messages.star,POST,/v1/messages/conversations/{convId}/messages/{msgId}/star,/v1/messages/conversations/{convId}/messages/{msgId}/star,Implemented,TEST-MSG-013,Bookmark/star message
+Messages,messages.unstar,DELETE,/v1/messages/conversations/{convId}/messages/{msgId}/star,/v1/messages/conversations/{convId}/messages/{msgId}/star,Implemented,TEST-MSG-014,Unstar message
+Messages,messages.starred,GET,/v1/messages/starred,/v1/messages/starred,Implemented,TEST-MSG-015,List starred messages
+Messages,messages.initiateCall,POST,/v1/messages/conversations/{convId}/calls,/v1/messages/conversations/{convId}/calls,Implemented,TEST-MSG-016,Initiate WebRTC audio/video call
+Messages,messages.signalCall,POST,/v1/messages/conversations/{convId}/calls/signal,/v1/messages/conversations/{convId}/calls/signal,Implemented,TEST-MSG-017,WebRTC ICE/SDP signaling exchange
+Messages,messages.endCall,POST,/v1/messages/calls/{callId}/end,/v1/messages/calls/{callId}/end,Implemented,TEST-MSG-018,Terminate active call session
+Messages,messages.callHistory,GET,/v1/messages/calls/history,/v1/messages/calls/history,Implemented,TEST-MSG-019,Call logs and duration
+Messages,messages.markRead,POST,/v1/messages/conversations/{conversationId}/read,/v1/messages/conversations/{conversationId}/read,Implemented,TEST-MSG-020,Conversation read receipt acknowledgment
+Messages,messages.downloadAttachment,GET,/v1/messages/conversations/{conversationId}/attachments/{objectId}/download,/v1/messages/conversations/{conversationId}/attachments/{objectId}/download,Implemented,TEST-MSG-021,Attachment download signed URL
+Learning,learning.courses,GET,/v1/learning/courses,-,Missing,SCHED-P5-001,Domain scheduled for Phase 5 implementation
+Learning,learning.lessons,GET,/v1/learning/courses/{id}/lessons,-,Missing,SCHED-P5-002,Domain scheduled for Phase 5 implementation
+Learning,learning.createCourse,POST,/v1/learning/courses,-,Missing,SCHED-P5-003,Domain scheduled for Phase 5 implementation
+Learning,learning.enroll,POST,/v1/learning/courses/{id}/enrollments,-,Missing,SCHED-P5-004,Domain scheduled for Phase 5 implementation
+Learning,learning.addLesson,POST,/v1/learning/courses/{id}/lessons,-,Missing,SCHED-P5-005,Domain scheduled for Phase 5 implementation
+Learning,learning.completeLesson,POST,/v1/learning/courses/{courseId}/lessons/{lessonId}/complete,-,Missing,SCHED-P5-006,Domain scheduled for Phase 5 implementation
+Learning,learning.claimCertificate,POST,/v1/learning/courses/{courseId}/certificate,-,Missing,SCHED-P5-007,Domain scheduled for Phase 5 implementation
+Learning,learning.myCertificates,GET,/v1/learning/certificates/my,-,Missing,SCHED-P5-008,Domain scheduled for Phase 5 implementation
+Learning,learning.verifyCertificate,GET,/v1/learning/certificates/verify/{certificateNumber},-,Missing,SCHED-P5-009,Domain scheduled for Phase 5 implementation
+Learning,learning.lessonExercise,GET,/v1/learning/courses/{courseId}/lessons/{lessonId}/exercise,-,Missing,SCHED-P5-010,Domain scheduled for Phase 5 implementation
+Projects,projects.list,GET,/v1/projects,-,Missing,SCHED-P5-011,Domain scheduled for Phase 5 implementation
+Projects,projects.create,POST,/v1/projects,-,Missing,SCHED-P5-012,Domain scheduled for Phase 5 implementation
+Projects,projects.invite,POST,/v1/projects/{id}/members,-,Missing,SCHED-P5-013,Domain scheduled for Phase 5 implementation
+Projects,projects.acceptInvite,POST,/v1/projects/{id}/membership/accept,-,Missing,SCHED-P5-014,Domain scheduled for Phase 5 implementation
+Projects,projects.files,GET,/v1/projects/{id}/files,-,Missing,SCHED-P5-015,Domain scheduled for Phase 5 implementation
+Projects,projects.saveFile,PUT,/v1/projects/{id}/files,-,Missing,SCHED-P5-016,Domain scheduled for Phase 5 implementation
+Projects,projects.deleteFile,DELETE,/v1/projects/{id}/files/{fileId},-,Missing,SCHED-P5-017,Domain scheduled for Phase 5 implementation
+Projects,projects.tasks,GET,/v1/projects/{id}/tasks,-,Missing,SCHED-P5-018,Domain scheduled for Phase 5 implementation
+Projects,projects.createTask,POST,/v1/projects/{id}/tasks,-,Missing,SCHED-P5-019,Domain scheduled for Phase 5 implementation
+Projects,projects.updateTaskStatus,PATCH,/v1/projects/{id}/tasks/{taskId}/status,-,Missing,SCHED-P5-020,Domain scheduled for Phase 5 implementation
+Projects,projects.milestones,GET,/v1/projects/{id}/milestones,-,Missing,SCHED-P5-021,Domain scheduled for Phase 5 implementation
+Projects,projects.createMilestone,POST,/v1/projects/{id}/milestones,-,Missing,SCHED-P5-022,Domain scheduled for Phase 5 implementation
+Services,services.list,GET,/v1/services,-,Missing,SCHED-P5-023,Domain scheduled for Phase 5 implementation
+Services,services.bookings,GET,/v1/services/bookings,-,Missing,SCHED-P5-024,Domain scheduled for Phase 5 implementation
+Services,services.createListing,POST,/v1/services,-,Missing,SCHED-P5-025,Domain scheduled for Phase 5 implementation
+Services,services.book,POST,/v1/services/{id}/bookings,-,Missing,SCHED-P5-026,Domain scheduled for Phase 5 implementation
+Services,services.confirm,POST,/v1/services/bookings/{id}/confirm,-,Missing,SCHED-P5-027,Domain scheduled for Phase 5 implementation
+Services,services.cancel,POST,/v1/services/bookings/{id}/cancel,-,Missing,SCHED-P5-028,Domain scheduled for Phase 5 implementation
+Services,services.reviews,GET,/v1/services/{id}/reviews,-,Missing,SCHED-P5-029,Domain scheduled for Phase 5 implementation
+Services,services.createReview,POST,/v1/services/{id}/reviews,-,Missing,SCHED-P5-030,Domain scheduled for Phase 5 implementation
+Companies,companies.list,GET,/v1/companies,-,Missing,SCHED-P5-031,Domain scheduled for Phase 5 implementation
+Companies,companies.create,POST,/v1/companies,-,Missing,SCHED-P5-032,Domain scheduled for Phase 5 implementation
+Companies,companies.invite,POST,/v1/companies/{id}/members,-,Missing,SCHED-P5-033,Domain scheduled for Phase 5 implementation
+Companies,companies.acceptInvite,POST,/v1/companies/{id}/membership/accept,-,Missing,SCHED-P5-034,Domain scheduled for Phase 5 implementation
+Companies,companies.tasks,GET,/v1/companies/{id}/tasks,-,Missing,SCHED-P5-035,Domain scheduled for Phase 5 implementation
+Companies,companies.createTask,POST,/v1/companies/{id}/tasks,-,Missing,SCHED-P5-036,Domain scheduled for Phase 5 implementation
+Companies,companies.updateTask,PATCH,/v1/companies/{id}/tasks/{taskId},-,Missing,SCHED-P5-037,Domain scheduled for Phase 5 implementation
+Companies,companies.documents,GET,/v1/companies/{id}/documents,-,Missing,SCHED-P5-038,Domain scheduled for Phase 5 implementation
+Companies,companies.createDocument,POST,/v1/companies/{id}/documents,-,Missing,SCHED-P5-039,Domain scheduled for Phase 5 implementation
+Companies,companies.downloadDocument,GET,/v1/companies/{id}/documents/{documentId}/download,-,Missing,SCHED-P5-040,Domain scheduled for Phase 5 implementation
+Companies,companies.archiveDocument,DELETE,/v1/companies/{id}/documents/{documentId},-,Missing,SCHED-P5-041,Domain scheduled for Phase 5 implementation
+Mentors,mentors.list,GET,/v1/mentors,-,Missing,SCHED-P5-042,Domain scheduled for Phase 5 implementation
+Mentors,mentors.sessions,GET,/v1/mentors/sessions,-,Missing,SCHED-P5-043,Domain scheduled for Phase 5 implementation
+Mentors,mentors.upsertProfile,POST,/v1/mentors/profile,-,Missing,SCHED-P5-044,Domain scheduled for Phase 5 implementation
+Mentors,mentors.requestSession,POST,/v1/mentors/{id}/sessions,-,Missing,SCHED-P5-045,Domain scheduled for Phase 5 implementation
+Mentors,mentors.confirmSession,POST,/v1/mentors/sessions/{id}/confirm,-,Missing,SCHED-P5-046,Domain scheduled for Phase 5 implementation
+Mentors,mentors.cancelSession,POST,/v1/mentors/sessions/{id}/cancel,-,Missing,SCHED-P5-047,Domain scheduled for Phase 5 implementation
+Mentors,mentors.slots,GET,/v1/mentors/{id}/slots,-,Missing,SCHED-P5-048,Domain scheduled for Phase 5 implementation
+Mentors,mentors.createSlot,POST,/v1/mentors/slots,-,Missing,SCHED-P5-049,Domain scheduled for Phase 5 implementation
+Mentors,mentors.bookSlot,POST,/v1/mentors/slots/{slotId}/book,-,Missing,SCHED-P5-050,Domain scheduled for Phase 5 implementation
+Career,career.jobs,GET,/v1/career/jobs,-,Missing,SCHED-P5-051,Domain scheduled for Phase 5 implementation
+Career,career.applications,GET,/v1/career/applications,-,Missing,SCHED-P5-052,Domain scheduled for Phase 5 implementation
+Career,career.createJob,POST,/v1/career/jobs,-,Missing,SCHED-P5-053,Domain scheduled for Phase 5 implementation
+Career,career.apply,POST,/v1/career/jobs/{id}/applications,-,Missing,SCHED-P5-054,Domain scheduled for Phase 5 implementation
+Career,career.withdraw,POST,/v1/career/applications/{id}/withdraw,-,Missing,SCHED-P5-055,Domain scheduled for Phase 5 implementation
+Career,career.jobApplications,GET,/v1/career/jobs/{id}/applications,-,Missing,SCHED-P5-056,Domain scheduled for Phase 5 implementation
+Career,career.reviewApplication,PATCH,/v1/career/jobs/{id}/applications/{appId}/review,-,Missing,SCHED-P5-057,Domain scheduled for Phase 5 implementation
+Storage,storage.requestUpload,POST,/v1/storage/uploads,-,Missing,SCHED-P5-058,Domain scheduled for Phase 5 implementation
+Storage,storage.completeUpload,POST,/v1/storage/uploads/{id}/complete,-,Missing,SCHED-P5-059,Domain scheduled for Phase 5 implementation
+Storage,storage.putFile,PUT,externalUploadUrl,-,Missing,SCHED-P5-060,Domain scheduled for Phase 5 implementation
+Payments,payments.createOrder,POST,/v1/payments/orders,-,Missing,SCHED-P5-061,Domain scheduled for Phase 5 implementation
+Payments,payments.confirmOrder,POST,/v1/payments/orders/{id}/confirm,-,Missing,SCHED-P5-062,Domain scheduled for Phase 5 implementation
+Payments,payments.webhook,POST,/v1/payments/webhook,-,Missing,SCHED-P5-063,Domain scheduled for Phase 5 implementation
+Payments,payments.orders,GET,/v1/payments/orders,-,Missing,SCHED-P5-064,Domain scheduled for Phase 5 implementation
+Payments,payments.reconciliation,GET,/v1/payments/orders/{id}/reconciliation,-,Missing,SCHED-P5-065,Domain scheduled for Phase 5 implementation
+Payments,payments.requestPayout,POST,/v1/payments/payouts,-,Missing,SCHED-P5-066,Domain scheduled for Phase 5 implementation
+Payments,payments.payouts,GET,/v1/payments/payouts,-,Missing,SCHED-P5-067,Domain scheduled for Phase 5 implementation

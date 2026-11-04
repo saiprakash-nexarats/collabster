@@ -105,6 +105,38 @@ public class MessagingServiceImpl implements MessagingService {
     }
 
     @Override
+    @Transactional
+    public ConversationResponse createGroupConversation(Long currentUserId, String title, List<Long> memberIds) {
+        rateLimiter.checkConversationCreation(currentUserId);
+        Conversation newConv = Conversation.builder()
+                .type(ConversationType.GROUP)
+                .createdAt(Instant.now())
+                .updatedAt(Instant.now())
+                .build();
+        Conversation conversation = conversationRepository.saveAndFlush(newConv);
+
+        Set<Long> allUserIds = new HashSet<>();
+        allUserIds.add(currentUserId);
+        if (memberIds != null) {
+            allUserIds.addAll(memberIds);
+        }
+
+        List<ConversationParticipant> participants = new ArrayList<>();
+        for (Long userId : allUserIds) {
+            User user = userRepository.getReferenceById(userId);
+            participants.add(ConversationParticipant.builder()
+                    .id(new ConversationParticipantId(conversation.getId(), userId))
+                    .conversation(conversation)
+                    .user(user)
+                    .joinedAt(Instant.now())
+                    .build());
+        }
+        participantRepository.saveAll(participants);
+        log.info("Created new GROUP conversation {} with {} members", conversation.getId(), allUserIds.size());
+        return mapConversationResponse(conversation, currentUserId);
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public ConversationPageResponse getConversations(Long currentUserId, String cursor, int limit) {
         int pageSize = Math.min(Math.max(limit, 1), properties.getMaxPageSize());

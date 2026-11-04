@@ -8,6 +8,8 @@ public interface MessagingService {
 
     ConversationResponse getOrCreateDirectConversation(Long currentUserId, Long targetUserId);
 
+    ConversationResponse createGroupConversation(Long currentUserId, String title, java.util.List<Long> memberIds);
+
     ConversationPageResponse getConversations(Long currentUserId, String cursor, int limit);
 
     ConversationResponse getConversation(UUID conversationId, Long currentUserId);

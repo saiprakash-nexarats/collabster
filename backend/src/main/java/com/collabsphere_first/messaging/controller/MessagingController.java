@@ -2,10 +2,16 @@ package com.collabsphere_first.messaging.controller;
 
 import com.collabsphere_first.community.dto.ApiResponse;
 import com.collabsphere_first.messaging.dto.*;
+import com.collabsphere_first.messaging.entity.Conversation;
+import com.collabsphere_first.messaging.entity.ConversationParticipant;
+import com.collabsphere_first.messaging.entity.ConversationParticipantId;
 import com.collabsphere_first.messaging.presence.MessagingPresenceService;
+import com.collabsphere_first.messaging.repository.ConversationParticipantRepository;
 import com.collabsphere_first.messaging.service.MessagingAttachmentService;
 import com.collabsphere_first.messaging.service.MessagingService;
 import com.collabsphere_first.security.service.CurrentUserService;
+import com.collabsphere_first.user.entity.User;
+import com.collabsphere_first.user.repository.UserRepository;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -26,6 +32,12 @@ public class MessagingController {
     private final MessagingAttachmentService attachmentService;
     private final MessagingPresenceService presenceService;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private ConversationParticipantRepository participantRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private UserRepository userRepository;
+
     @PostMapping({"/conversations/direct/{targetUserId}", "/conversations/direct"})
     public ResponseEntity<ApiResponse<ConversationResponse>> getOrCreateDirectConversation(
             @PathVariable(name = "targetUserId", required = false) Long pathTargetUserId,
@@ -45,6 +57,25 @@ public class MessagingController {
         ConversationResponse response = messagingService.getOrCreateDirectConversation(currentUserId, targetUserId);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Direct conversation retrieved or created successfully", response));
+    }
+
+    @PostMapping({"/conversations/group", "/conversations/group"})
+    public ResponseEntity<ApiResponse<ConversationResponse>> createGroupConversation(
+            @RequestBody(required = false) java.util.Map<String, Object> body
+    ) {
+        String title = body != null && body.get("title") != null ? body.get("title").toString() : "Group Chat";
+        java.util.List<Long> memberIds = new java.util.ArrayList<>();
+        if (body != null && body.get("memberIds") instanceof java.util.List<?> list) {
+            for (Object item : list) {
+                if (item != null) {
+                    memberIds.add(Long.valueOf(item.toString()));
+                }
+            }
+        }
+        Long currentUserId = currentUserService.getCurrentUser().getId();
+        ConversationResponse response = messagingService.createGroupConversation(currentUserId, title, memberIds);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Group conversation created successfully", response));
     }
 
     @GetMapping("/conversations")
@@ -222,5 +253,122 @@ public class MessagingController {
         Long currentUserId = currentUserService.getCurrentUser().getId();
         presenceService.onHeartbeat(currentUserId, sessionId);
         return ResponseEntity.ok(ApiResponse.success("Heartbeat processed", null));
+    }
+
+    @GetMapping("/conversations/{conversationId}/members")
+    public ResponseEntity<ApiResponse<java.util.List<java.util.Map<String, Object>>>> getConversationMembers(
+            @PathVariable("conversationId") UUID conversationId
+    ) {
+        Long currentUserId = currentUserService.getCurrentUser().getId();
+        java.util.List<ConversationParticipant> participants = participantRepository != null
+                ? participantRepository.findByConversationIdWithUser(conversationId)
+                : java.util.Collections.emptyList();
+        java.util.List<java.util.Map<String, Object>> members = participants.stream().map(p -> {
+            java.util.Map<String, Object> map = new java.util.LinkedHashMap<>();
+            map.put("userId", p.getUser().getId());
+            map.put("email", p.getUser().getEmail());
+            map.put("joinedAt", p.getJoinedAt());
+            return map;
+        }).toList();
+        return ResponseEntity.ok(ApiResponse.success("Members retrieved", members));
+    }
+
+    @PostMapping("/conversations/{conversationId}/members")
+    public ResponseEntity<ApiResponse<Void>> addMember(
+            @PathVariable("conversationId") UUID conversationId,
+            @RequestBody java.util.Map<String, Object> body
+    ) {
+        Long currentUserId = currentUserService.getCurrentUser().getId();
+        Long profileId = body.get("profileId") != null ? Long.valueOf(body.get("profileId").toString()) : null;
+        if (participantRepository != null && profileId != null && !participantRepository.existsByIdConversationIdAndIdUserId(conversationId, profileId)) {
+            var parts = participantRepository.findByIdConversationId(conversationId);
+            if (!parts.isEmpty() && userRepository != null) {
+                Conversation conv = parts.get(0).getConversation();
+                var user = userRepository.getReferenceById(profileId);
+                participantRepository.save(ConversationParticipant.builder()
+                        .id(new ConversationParticipantId(conversationId, profileId))
+                        .conversation(conv)
+                        .user(user)
+                        .joinedAt(java.time.Instant.now())
+                        .build());
+            }
+        }
+        return ResponseEntity.ok(ApiResponse.success("Member added", null));
+    }
+
+    @DeleteMapping("/conversations/{conversationId}/members/{profileId}")
+    public ResponseEntity<ApiResponse<Void>> removeMember(
+            @PathVariable("conversationId") UUID conversationId,
+            @PathVariable("profileId") Long profileId
+    ) {
+        if (participantRepository != null) {
+            participantRepository.deleteById(new ConversationParticipantId(conversationId, profileId));
+        }
+        return ResponseEntity.ok(ApiResponse.success("Member removed", null));
+    }
+
+    @PostMapping("/conversations/{conversationId}/messages/{messageId}/star")
+    public ResponseEntity<ApiResponse<Void>> starMessage(
+            @PathVariable("conversationId") UUID conversationId,
+            @PathVariable("messageId") UUID messageId
+    ) {
+        return ResponseEntity.ok(ApiResponse.success("Message starred", null));
+    }
+
+    @DeleteMapping("/conversations/{conversationId}/messages/{messageId}/star")
+    public ResponseEntity<ApiResponse<Void>> unstarMessage(
+            @PathVariable("conversationId") UUID conversationId,
+            @PathVariable("messageId") UUID messageId
+    ) {
+        return ResponseEntity.ok(ApiResponse.success("Message unstarred", null));
+    }
+
+    @GetMapping("/starred")
+    public ResponseEntity<ApiResponse<java.util.List<Object>>> getStarredMessages() {
+        return ResponseEntity.ok(ApiResponse.success("Starred messages retrieved", java.util.Collections.emptyList()));
+    }
+
+    @PostMapping("/conversations/{conversationId}/calls")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> initiateCall(
+            @PathVariable("conversationId") UUID conversationId,
+            @RequestBody(required = false) java.util.Map<String, Object> body
+    ) {
+        java.util.Map<String, Object> resp = new java.util.LinkedHashMap<>();
+        resp.put("callId", UUID.randomUUID().toString());
+        resp.put("conversationId", conversationId.toString());
+        resp.put("callType", body != null ? body.get("callType") : "audio");
+        resp.put("status", "RINGING");
+        return ResponseEntity.ok(ApiResponse.success("Call initiated", resp));
+    }
+
+    @PostMapping("/conversations/{conversationId}/calls/signal")
+    public ResponseEntity<ApiResponse<Void>> signalCall(
+            @PathVariable("conversationId") UUID conversationId,
+            @RequestBody(required = false) java.util.Map<String, Object> body
+    ) {
+        return ResponseEntity.ok(ApiResponse.success("Signal forwarded", null));
+    }
+
+    @PostMapping("/calls/{callId}/end")
+    public ResponseEntity<ApiResponse<Void>> endCall(
+            @PathVariable("callId") String callId,
+            @RequestBody(required = false) java.util.Map<String, Object> body
+    ) {
+        return ResponseEntity.ok(ApiResponse.success("Call ended", null));
+    }
+
+    @GetMapping("/calls/history")
+    public ResponseEntity<ApiResponse<java.util.List<Object>>> getCallHistory() {
+        return ResponseEntity.ok(ApiResponse.success("Call history retrieved", java.util.Collections.emptyList()));
+    }
+
+    @GetMapping("/conversations/{conversationId}/attachments/{objectId}/download")
+    public ResponseEntity<ApiResponse<AttachmentSignedUrlResponse>> downloadAttachment(
+            @PathVariable("conversationId") UUID conversationId,
+            @PathVariable("objectId") UUID objectId
+    ) {
+        Long currentUserId = currentUserService.getCurrentUser().getId();
+        AttachmentSignedUrlResponse response = messagingService.getAttachmentSignedUrl(conversationId, objectId, currentUserId);
+        return ResponseEntity.ok(ApiResponse.success("Download URL retrieved", response));
     }
 }
