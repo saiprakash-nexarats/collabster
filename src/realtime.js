@@ -7,6 +7,6 @@ export function sendRealtime(destination,body){if(activeSocket?.readyState!==Web
 
 export function connectRealtime(accessToken,{onEvent,onState}={}){
  if(!baseUrl||!accessToken||typeof WebSocket==='undefined')return()=>{};
- const url=baseUrl.replace(/^http/,'ws')+'/realtime';let socket;let closed=false;let retry;
+ const url=baseUrl.replace(/^http/,'ws')+'/ws/community';let socket;let closed=false;let retry;
  const open=()=>{if(closed)return;socket=new WebSocket(url);socket.onopen=()=>{activeSocket=socket;onState?.('connected');socket.send(frame('CONNECT',{Authorization:`Bearer ${accessToken}`,'accept-version':'1.2','heart-beat':'10000,10000'}));};socket.onmessage=event=>parseRealtimeFrames(event.data).forEach(packet=>{if(packet.command==='CONNECTED')socket.send(frame('SUBSCRIBE',{id:'collobster-updates',destination:'/user/queue/updates',ack:'auto'}));if(packet.command==='MESSAGE'&&packet.body)onEvent?.(packet.body);});socket.onclose=()=>{if(activeSocket===socket)activeSocket=undefined;if(!closed){onState?.('disconnected');retry=setTimeout(open,3000);}};socket.onerror=()=>socket.close();};open();return()=>{closed=true;clearTimeout(retry);if(socket?.readyState===WebSocket.OPEN)socket.send(frame('DISCONNECT'));socket?.close();};
 }

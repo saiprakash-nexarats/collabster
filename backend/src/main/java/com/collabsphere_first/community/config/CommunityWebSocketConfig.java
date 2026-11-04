@@ -60,7 +60,7 @@ public class CommunityWebSocketConfig implements WebSocketMessageBrokerConfigure
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         String[] origins = Arrays.stream(allowedOrigins.split(",")).map(String::trim).filter(value -> !value.isBlank()).toArray(String[]::new);
-        registry.addEndpoint("/ws/community").setAllowedOriginPatterns(origins);
+        registry.addEndpoint("/ws/community", "/realtime", "/ws/messages", "/ws").setAllowedOriginPatterns(origins);
     }
 
     @Override

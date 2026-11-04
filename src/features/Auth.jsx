@@ -305,7 +305,16 @@ export function Auth({ onComplete }) {
   const [verifyToken, setVerifyToken] = useState('');
   const [verifySuccess, setVerifySuccess] = useState('');
   const [pendingSession, setPendingSession] = useState(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
   const [customCity, setCustomCity] = useState(false);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown((c) => (c > 0 ? c - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
 
   useEffect(() => {
     try {
@@ -457,13 +466,29 @@ export function Auth({ onComplete }) {
     }
     setSubmitting(true);
     setError('');
+    const targetEmail = pendingSession?.email || form.email;
     try {
       if (api.configured) {
-        await api.auth.verifyEmail(verifyToken.trim());
+        await api.auth.verifyEmail(verifyToken.trim(), targetEmail);
       }
       setVerifySuccess('Email has been successfully verified!');
-      setTimeout(() => {
-        if (pendingSession) {
+      setTimeout(async () => {
+        if (api.configured && pendingSession?.email && form.password) {
+          try {
+            const loginSession = await api.auth.login({
+              email: pendingSession.email,
+              password: form.password,
+            });
+            onComplete({
+              ...pendingSession,
+              accessToken: loginSession.accessToken,
+              profileId: loginSession.profileId || pendingSession.profileId,
+              provider: 'email',
+            });
+            return;
+          } catch (_) {}
+        }
+        if (!api.configured && pendingSession) {
           onComplete(pendingSession);
         } else {
           setMode('signin');
@@ -474,6 +499,25 @@ export function Auth({ onComplete }) {
       setError(exception.detail || 'Invalid or expired email verification token.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (resendCooldown > 0) return;
+    const targetEmail = pendingSession?.email || form.email;
+    if (!targetEmail) {
+      return setError('Please enter your email address to receive a verification code.');
+    }
+    setError('');
+    try {
+      if (api.configured) {
+        await api.auth.resendOtp(targetEmail);
+      }
+      setVerifySuccess('A new verification code has been dispatched to your email.');
+      setResendCooldown(30);
+      setTimeout(() => setVerifySuccess(''), 4000);
+    } catch (err) {
+      setError(err.detail || 'Could not resend verification code. Please try again later.');
     }
   };
 
@@ -645,25 +689,20 @@ export function Auth({ onComplete }) {
                   type="button"
                   className="auth-link"
                   onClick={() => {
-                    if (pendingSession) {
-                      onComplete(pendingSession);
-                    } else {
-                      setMode('signin');
-                      setError('');
-                    }
+                    setMode('signin');
+                    setError('');
                   }}
                 >
-                  {pendingSession ? 'Continue to App (Verify later)' : 'Back to Sign In'}
+                  Back to Sign In
                 </button>
 
                 <button
                   type="button"
                   className="auth-link"
-                  onClick={() => {
-                    setError('If an account exists, a new verification email will be dispatched.');
-                  }}
+                  disabled={submitting || resendCooldown > 0}
+                  onClick={handleResendOtp}
                 >
-                  Resend code
+                  {resendCooldown > 0 ? `Resend code (${resendCooldown}s)` : 'Resend code'}
                 </button>
               </div>
             </form>

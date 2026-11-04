@@ -114,7 +114,6 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .message("Registration successful. Please verify your email using the OTP sent to your email.")
                 .email(savedUser.getEmail())
                 .profileId(savedUser.getId())
-                .otp(otp.getOtp())
                 .build();
     }
 

@@ -19,7 +19,12 @@ import org.springframework.web.bind.annotation.*;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/v1/posts/{id}/comments")
+@RequestMapping({
+        "/api/v1/posts/{id}/comments",
+        "/v1/posts/{id}/comments",
+        "/api/v1/communities/{communityId}/posts/{id}/comments",
+        "/v1/communities/{communityId}/posts/{id}/comments"
+})
 @RequiredArgsConstructor
 @PreAuthorize("isAuthenticated()")
 @Tag(name = "Comments API", description = "Endpoints for post comment threads")

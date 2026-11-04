@@ -57,7 +57,6 @@ public class AuthenticationTokenService {
         return AuthenticationResponse.builder()
                 .accessToken(accessToken)
                 .tokenType("Bearer")
-                .refreshToken(refreshToken)
                 .email(user.getEmail())
                 .displayName(((user.getFirstName() != null ? user.getFirstName() : "") + " " + (user.getLastName() != null ? user.getLastName() : "")).trim())
                 .username(user.getUsername())

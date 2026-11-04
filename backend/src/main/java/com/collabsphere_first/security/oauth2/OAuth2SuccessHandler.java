@@ -15,12 +15,14 @@ import org.springframework.security.web.authentication.AuthenticationSuccessHand
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
 public class OAuth2SuccessHandler implements AuthenticationSuccessHandler {
     private final AuthenticationTokenService authenticationTokenService;
     private final UserRepository userRepository;
+    private final OAuth2CodeStore oAuth2CodeStore;
 
     @Value("${collobster.frontend.url:http://localhost:5173}")
     private String frontendUrl;
@@ -72,7 +74,13 @@ public class OAuth2SuccessHandler implements AuthenticationSuccessHandler {
         String base = (frontendUrl != null && !frontendUrl.isBlank())
                 ? frontendUrl.replaceAll("/+$", "")
                 : "http://localhost:5173";
-        String redirectUrl = base + "/?oauth_token=" + authResponse.getAccessToken();
+
+        // SEC-003: Never pass raw bearer access tokens in URL query parameters.
+        // Issue a short-lived, single-use one-time authorization code (valid 60 seconds).
+        String oneTimeCode = UUID.randomUUID().toString();
+        oAuth2CodeStore.saveCode(oneTimeCode, authResponse, 60);
+
+        String redirectUrl = base + "/?oauth_code=" + oneTimeCode;
         response.sendRedirect(redirectUrl);
     }
 }

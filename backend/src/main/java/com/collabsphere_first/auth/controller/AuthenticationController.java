@@ -3,9 +3,11 @@ package com.collabsphere_first.auth.controller;
 import com.collabsphere_first.auth.dto.request.*;
 import com.collabsphere_first.auth.dto.response.AuthenticationResponse;
 import com.collabsphere_first.auth.dto.response.MessageResponse;
+import com.collabsphere_first.auth.exception.InvalidOtpException;
 import com.collabsphere_first.auth.service.AuthenticationService;
 import com.collabsphere_first.otp.entity.Otp;
 import com.collabsphere_first.otp.repository.OtpRepository;
+import com.collabsphere_first.security.oauth2.OAuth2CodeStore;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -22,6 +24,7 @@ public class AuthenticationController {
 
     private final AuthenticationService authenticationService;
     private final OtpRepository otpRepository;
+    private final OAuth2CodeStore oAuth2CodeStore;
 
     @PostMapping("/register")
     public ResponseEntity<MessageResponse> register(
@@ -76,10 +79,28 @@ public class AuthenticationController {
     @PostMapping({"/refresh-token", "/refresh"})
     public ResponseEntity<AuthenticationResponse> refreshToken(
             HttpServletRequest request,
-            HttpServletResponse response) {
+            HttpServletResponse response,
+            @RequestBody(required = false) Map<String, String> body) {
+        if (body != null && body.containsKey("refreshToken")) {
+            request.setAttribute("refreshToken", body.get("refreshToken"));
+        }
         return ResponseEntity.ok(
                 authenticationService.refreshToken(request, response)
         );
+    }
+
+    @PostMapping("/oauth2/exchange")
+    public ResponseEntity<AuthenticationResponse> exchangeOAuth2Code(
+            @RequestBody Map<String, String> body) {
+        String code = body != null ? body.get("code") : null;
+        if (code == null || code.isBlank()) {
+            throw new IllegalArgumentException("Authorization code is required.");
+        }
+        AuthenticationResponse authResponse = oAuth2CodeStore.consumeCode(code.trim());
+        if (authResponse == null) {
+            throw new InvalidOtpException("Invalid or expired OAuth authorization code.");
+        }
+        return ResponseEntity.ok(authResponse);
     }
 
     @PostMapping("/logout")

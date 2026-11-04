@@ -26,10 +26,21 @@ public class MessagingController {
     private final MessagingAttachmentService attachmentService;
     private final MessagingPresenceService presenceService;
 
-    @PostMapping("/conversations/direct/{targetUserId}")
+    @PostMapping({"/conversations/direct/{targetUserId}", "/conversations/direct"})
     public ResponseEntity<ApiResponse<ConversationResponse>> getOrCreateDirectConversation(
-            @PathVariable("targetUserId") Long targetUserId
+            @PathVariable(name = "targetUserId", required = false) Long pathTargetUserId,
+            @RequestBody(required = false) java.util.Map<String, Object> body
     ) {
+        Long targetUserId = pathTargetUserId;
+        if (targetUserId == null && body != null) {
+            Object val = body.get("recipientId") != null ? body.get("recipientId") : body.get("targetUserId");
+            if (val != null) {
+                targetUserId = Long.valueOf(val.toString());
+            }
+        }
+        if (targetUserId == null) {
+            throw new IllegalArgumentException("targetUserId or recipientId is required.");
+        }
         Long currentUserId = currentUserService.getCurrentUser().getId();
         ConversationResponse response = messagingService.getOrCreateDirectConversation(currentUserId, targetUserId);
         return ResponseEntity.status(HttpStatus.CREATED)
@@ -55,7 +66,7 @@ public class MessagingController {
         return ResponseEntity.ok(ApiResponse.success("Conversation retrieved successfully", response));
     }
 
-    @GetMapping("/conversations/{conversationId}/messages")
+    @GetMapping({"/conversations/{conversationId}/messages", "/conversations/{conversationId}/history"})
     public ResponseEntity<ApiResponse<MessagePageResponse>> getMessages(
             @PathVariable("conversationId") UUID conversationId,
             @RequestParam(name = "cursor", required = false) String cursor,
@@ -77,9 +88,10 @@ public class MessagingController {
                 .body(ApiResponse.success("Message sent successfully", response));
     }
 
-    @PatchMapping("/{messageId}")
+    @PatchMapping({"/{messageId}", "/conversations/{conversationId}/messages/{messageId}"})
     public ResponseEntity<ApiResponse<MessageResponse>> editMessage(
             @PathVariable("messageId") UUID messageId,
+            @PathVariable(name = "conversationId", required = false) UUID conversationId,
             @Valid @RequestBody EditMessageRequest request
     ) {
         Long currentUserId = currentUserService.getCurrentUser().getId();
@@ -87,18 +99,20 @@ public class MessagingController {
         return ResponseEntity.ok(ApiResponse.success("Message edited successfully", response));
     }
 
-    @DeleteMapping("/{messageId}")
+    @DeleteMapping({"/{messageId}", "/conversations/{conversationId}/messages/{messageId}"})
     public ResponseEntity<ApiResponse<Void>> deleteMessage(
-            @PathVariable("messageId") UUID messageId
+            @PathVariable("messageId") UUID messageId,
+            @PathVariable(name = "conversationId", required = false) UUID conversationId
     ) {
         Long currentUserId = currentUserService.getCurrentUser().getId();
         messagingService.deleteMessage(messageId, currentUserId);
         return ResponseEntity.ok(ApiResponse.success("Message deleted successfully", null));
     }
 
-    @PutMapping("/{messageId}/reaction")
+    @PutMapping({"/{messageId}/reaction", "/{messageId}/reactions", "/conversations/{conversationId}/messages/{messageId}/reactions", "/conversations/{conversationId}/messages/{messageId}/reaction"})
     public ResponseEntity<ApiResponse<ReactionResponse>> addOrUpdateReaction(
             @PathVariable("messageId") UUID messageId,
+            @PathVariable(name = "conversationId", required = false) UUID conversationId,
             @Valid @RequestBody ReactionRequest request
     ) {
         Long currentUserId = currentUserService.getCurrentUser().getId();
@@ -106,9 +120,10 @@ public class MessagingController {
         return ResponseEntity.ok(ApiResponse.success("Reaction updated successfully", response));
     }
 
-    @DeleteMapping("/{messageId}/reaction")
+    @DeleteMapping({"/{messageId}/reaction", "/{messageId}/reactions", "/conversations/{conversationId}/messages/{messageId}/reactions", "/conversations/{conversationId}/messages/{messageId}/reaction"})
     public ResponseEntity<ApiResponse<Void>> removeReaction(
-            @PathVariable("messageId") UUID messageId
+            @PathVariable("messageId") UUID messageId,
+            @PathVariable(name = "conversationId", required = false) UUID conversationId
     ) {
         Long currentUserId = currentUserService.getCurrentUser().getId();
         messagingService.removeReaction(messageId, currentUserId);

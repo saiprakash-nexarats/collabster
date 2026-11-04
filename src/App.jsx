@@ -17,7 +17,9 @@ import {Auth} from './features/Auth';
 export const navigation=[['Home',Home],['Explore',Compass],['Events',CalendarDays],['Community',Users]];
 const previewCompanyTasks={'preview-company':[{id:'company-task-1',title:'Research and planning',owner:'Ananya',state:'To do'},{id:'company-task-2',title:'Update grower onboarding',owner:'Riya',state:'In progress'},{id:'company-task-3',title:'Prepare pitch deck',owner:'Aman',state:'Review'}]};
 const previewCompanyDocuments={'preview-company':[{id:'company-document-1',objectId:'preview-object-1',title:'GreenCart pitch deck',filename:'greencart-pitch-deck.pdf',contentType:'application/pdf',bytes:2400000,collection:'fundraising',accessScope:'team',createdAt:'2026-09-18T10:00:00Z',remote:false},{id:'company-document-2',objectId:'preview-object-2',title:'Product launch brief',filename:'product-launch-brief.docx',contentType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',bytes:860000,collection:'product',accessScope:'team',createdAt:'2026-09-20T10:00:00Z',remote:false}]};
-function currentPage(){const p=decodeURIComponent(location.hash.slice(1));if(!p||p==='')return 'Home';return [...navigation.map(x=>x[0]),'Messages','Notifications','Profile','Saved','Settings'].includes(p)?p:'NotFound'}
+import {resolvePage,VALID_PAGES} from './domain.mjs';
+export {VALID_PAGES};
+function currentPage(){return resolvePage(location.hash);}
 export default function App(){
  const [page,setPage]=useState(currentPage),[theme,setTheme]=useStoredState('theme','light'),[profile,setProfile,storageError]=useStoredState('profile',initialProfile),[auth,setAuth]=useSessionStoredState('authSession',null),[posts,setPosts]=useStoredState('posts',initialPosts),[saved,setSaved]=useStoredState('saved',['p-me-1','p-me-2','p-me-3','p-me-4','p-me-5','p1','p2','e1','j1']),[likes,setLikes]=useStoredState('likes',[]),[following,setFollowing]=useStoredState('following',['riya','aman']),[followers,setFollowers]=useStoredState('followers',['riya','neha','arjun']),[comments,setComments]=useStoredState('comments',initialComments),[votes,setVotes]=useStoredState('votes',{}),[learning,setLearning]=useStoredState('learning',{}),[courseCatalog,setCourseCatalog]=useStoredState('courseCatalog',[]),[applications,setApplications]=useStoredState('applications',{}),[careerJobs,setCareerJobs]=useStoredState('careerJobs',[]),[projectState,setProjectState]=useStoredState('projects',{}),[projectDrafts,setProjectDrafts]=useStoredState('projectDrafts',[]),[companyDrafts,setCompanyDrafts]=useStoredState('companyDrafts',[]),[companyInvitations,setCompanyInvitations]=useStoredState('companyInvitations',{}),[memberships,setMemberships]=useStoredState('memberships',{}),[registrations,setRegistrations]=useStoredState('events',[]),[eventCatalog,setEventCatalog]=useStoredState('eventCatalog',[]),[bookings,setBookings]=useStoredState('bookings',[]),[mentorCatalog,setMentorCatalog]=useStoredState('mentorCatalog',[]),[serviceListings,setServiceListings]=useStoredState('serviceListings',[]),[pipeline,setPipeline]=useStoredState('pipeline',{}),[threads,setThreads]=useStoredState('threads',initialThreads),[notifications,setNotifications]=useStoredState('notifications',seededNotifications),[preferences,setPreferences]=useStoredState('preferences',{community:true,career:true,messages:true}),[modal,setModal]=useState(null),[toast,setToast]=useState(''),[search,setSearch]=useState(''),[mobileMenu,setMobileMenu]=useState(false),[offline,setOffline]=useState(!navigator.onLine),[serviceState,setServiceState]=useState(api.configured?'checking':'preview'),[feedState,setFeedState]=useState({loading:false,nextCursor:null,error:''});
  const [companyTasks,setCompanyTasks]=useStoredState('companyTasks',previewCompanyTasks);
@@ -57,31 +59,39 @@ export default function App(){
  useEffect(()=>{
   try {
    const urlParams=new URLSearchParams(window.location.search);
-   const oauthToken=urlParams.get('oauth_token');
-   if(oauthToken){
+   const oauthCode=urlParams.get('oauth_code');
+   const legacyOauthToken=urlParams.get('oauth_token');
+   if(oauthCode || legacyOauthToken){
     window.history.replaceState({},document.title,window.location.pathname);
-    api.identity.me(oauthToken).then(remote=>{
-     const names=(remote.displayName||'').trim().split(/\s+/);
-     completeAuth({
-      firstName:names[0]||'Member',
-      lastName:names.slice(1).join(' '),
-      email:remote.email||'',
-      accessToken:oauthToken,
-      provider:'google',
-      profileId:remote.id,
-      role:remote.headline||'',
-      skills:Array.isArray(remote.skills)?remote.skills.join(', '):'',
-      interests:Array.isArray(remote.interests)?remote.interests.join(', '):'',
-      location:remote.location||'',
-      dob:remote.birthDate||'',
-      gender:remote.gender||'',
-      username:remote.username||'',
+    const resolveToken = oauthCode 
+      ? api.auth.oauthExchange(oauthCode).then(res => res.accessToken)
+      : Promise.resolve(legacyOauthToken);
+      
+    resolveToken.then(accessToken => {
+     if(!accessToken) throw new Error('NO_ACCESS_TOKEN');
+     return api.identity.me(accessToken).then(remote=>{
+      const names=(remote.displayName||'').trim().split(/\s+/);
+      completeAuth({
+       firstName:names[0]||'Member',
+       lastName:names.slice(1).join(' '),
+       email:remote.email||'',
+       accessToken:accessToken,
+       provider:'google',
+       profileId:remote.id,
+       role:remote.headline||'',
+       skills:Array.isArray(remote.skills)?remote.skills.join(', '):'',
+       interests:Array.isArray(remote.interests)?remote.interests.join(', '):'',
+       location:remote.location||'',
+       dob:remote.birthDate||'',
+       gender:remote.gender||'',
+       username:remote.username||'',
+      });
+      setToast(`Signed in as ${remote.displayName||'Google user'}`);
      });
-     setToast(`Signed in as ${remote.displayName||'Google user'}`);
-    }).catch(()=>{
-     setAuth({email:'',provider:'google',accessToken:oauthToken,refreshToken:null,signedInAt:Date.now()});
-     location.hash='Home';
-     setPage('Home');
+    }).catch((err)=>{
+     console.error('OAuth exchange/validation failed:', err);
+     setToast('Google sign-in could not be verified. Please try again.');
+     // SEC-003: Never store unvalidated token or fake session
     });
    }
   }catch(e){}
@@ -110,7 +120,7 @@ export default function App(){
  useEffect(()=>{const activate=event=>{const row=event.target.closest?.('.message-attachment');if(!row)return;const filename=row.querySelector('span')?.textContent;const match=threads.flatMap(thread=>thread.messages.map(message=>({thread,attachment:(message.attachments||[]).find(item=>item.filename===filename)}))).find(item=>item.attachment);if(match)downloadMessageAttachment(match.thread.id,match.attachment);};const keydown=event=>{if((event.key==='Enter'||event.key===' ')&&event.target.closest?.('.message-attachment')){event.preventDefault();activate(event);}};document.addEventListener('click',activate);document.addEventListener('keydown',keydown);document.querySelectorAll('.message-attachment').forEach(row=>{row.setAttribute('role','button');row.setAttribute('tabindex','0');row.setAttribute('aria-label',`Download ${row.querySelector('span')?.textContent||'attachment'}`);});return()=>{document.removeEventListener('click',activate);document.removeEventListener('keydown',keydown);};},[threads,serviceState,auth?.accessToken]);
  useEffect(()=>{if(!toast)return;const timer=setTimeout(()=>setToast(''),3500);return()=>clearTimeout(timer)},[toast]);
  useEffect(()=>{document.title=`${page} · Collobster`;window.scrollTo(0,0)},[page]);
- function completeAuth(details){const name=`${details.firstName||'Ananya'} ${details.lastName||'Sharma'}`.trim();setProfile(old=>({...old,profileId:details.profileId||old.profileId,name,location:details.location||old.location,headline:details.role||old.headline,skills:details.skills?details.skills.split(',').map(x=>x.trim()).filter(Boolean):old.skills,interests:details.interests?details.interests.split(',').map(x=>x.trim()).filter(Boolean):old.interests,username:details.username||old.username,dob:details.dob||old.dob,gender:details.gender||old.gender,onboarded:true}));setAuth({email:details.email||'',provider:details.provider||'email',accessToken:details.accessToken||null,refreshToken:details.refreshToken||null,signedInAt:Date.now()});location.hash='Home';setPage('Home')}
+ function completeAuth(details){if(api.configured&&!details.accessToken){setToast('Sign-in failed: an active verified session is required.');return;}const name=`${details.firstName||'Ananya'} ${details.lastName||'Sharma'}`.trim();setProfile(old=>({...old,profileId:details.profileId||old.profileId,name,location:details.location||old.location,headline:details.role||old.headline,skills:details.skills?details.skills.split(',').map(x=>x.trim()).filter(Boolean):old.skills,interests:details.interests?details.interests.split(',').map(x=>x.trim()).filter(Boolean):old.interests,username:details.username||old.username,dob:details.dob||old.dob,gender:details.gender||old.gender,onboarded:true}));setAuth({email:details.email||'',provider:details.provider||'email',accessToken:details.accessToken||null,refreshToken:details.refreshToken||null,signedInAt:Date.now()});location.hash='Home';setPage('Home')}
  async function saveProfile(next){if(serviceState==='connected'&&auth?.accessToken){const remote=await api.identity.update(profilePayload(next),auth.accessToken);setProfile(old=>({...next,...mergeRemoteProfile(next,remote)}));return 'synced'}setProfile(next);return 'preview'}
  async function updateProfilePrivacy(checked){const next={...profile,privacy:{...profile.privacy,profileVisibility:checked?'private':'public'}};try{const mode=await saveProfile(next);setToast(mode==='synced'?`Profile is now ${checked?'private':'public'} across your account.`:`Profile is now ${checked?'private':'public'} in Preview.`)}catch{setToast('Could not save profile visibility. Please try again.')}}
  async function createCompany(draft){const payload={name:draft.name.trim(),description:(draft.description||draft.tagline||'A new company workspace.').trim(),industry:draft.industry.trim(),stage:draft.stage.trim()};let remote=null;if(serviceState==='connected'&&auth?.accessToken)remote=await api.companies.create(payload,auth.accessToken);const company={...payload,id:remote?.id||`company-${crypto.randomUUID()}`,state:remote?.state||'verification_pending',tagline:draft.tagline,website:draft.website,headquarters:draft.headquarters,country:draft.country,teamSize:draft.teamSize,model:draft.model,path:draft.path||'Startup / dev environment',createdAt:new Date().toISOString(),remote:Boolean(remote)};setCompanyDrafts(old=>[company,...old.filter(item=>item.id!==company.id)]);return {...company,mode:remote?'synced':'preview'};}
@@ -168,7 +178,7 @@ export default function App(){
  async function confirmPaymentOrder(orderId,gatewayPaymentId){if(serviceState==='connected'&&auth?.accessToken){const remote=await api.payments.confirmOrder(orderId,{gatewayPaymentId},auth.accessToken);setPaymentOrders(old=>old.map(o=>o.id===orderId?{...o,...remote}:o));return {order:remote,mode:'synced'};}setPaymentOrders(old=>old.map(o=>o.id===orderId?{...o,status:'completed',gatewayPaymentId,completedAt:new Date().toISOString()}:o));return {mode:'preview'};}
  async function requestPayout(draft){if(serviceState==='connected'&&auth?.accessToken){const remote=await api.payments.requestPayout(draft,auth.accessToken);setPayoutRequests(old=>[remote,...old]);return {payout:remote,mode:'synced'};}const local={id:`payout-${crypto.randomUUID()}`,amountCents:draft.amountCents,method:draft.method||'bank_account',destinationReference:draft.destinationReference||'',status:'pending',createdAt:new Date().toISOString(),remote:false};setPayoutRequests(old=>[local,...old]);return {payout:local,mode:'preview'};}
  function go(next){if(page!=='Notifications'){setPrevPage(page)}location.hash=encodeURIComponent(next);setPage(next);setMobileMenu(false);setSearch('');setSearchExpanded(false)}
- async function logout(){const session=auth;setModal(null);setMobileMenu(false);setAuth(null);location.hash='Home';setPage('Home');if(serviceState==='connected'&&session?.refreshToken){try{await api.auth.logout(session.refreshToken,session.accessToken)}catch{setToast('Signed out on this device. The server session could not be revoked.')}}}
+ async function logout(){const session=auth;setModal(null);setMobileMenu(false);setAuth(null);location.hash='Home';setPage('Home');if(serviceState==='connected'){try{await api.auth.logout(session?.refreshToken,session?.accessToken)}catch{setToast('Signed out on this device.')}}}
  async function toggleSave(id){const isCurrentlySaved=saved.includes(id);if(serviceState==='connected'&&auth?.accessToken){try{if(isCurrentlySaved){await api.social.unsavePost(id,auth.accessToken);}else{await api.social.savePost(id,auth.accessToken);}}catch(err){console.warn('Could not sync save state with cloud:',err);}}setSaved(old=>old.includes(id)?old.filter(x=>x!==id):[...old,id])}
  function toggleSaveEvent(id){setSavedEvents(old=>old.includes(id)?old.filter(x=>x!==id):[...old,id])}
  function notify(title,text,module){setNotifications(old=>[{id:crypto.randomUUID(),title,text,module,time:'Just now',unread:true},...old])}

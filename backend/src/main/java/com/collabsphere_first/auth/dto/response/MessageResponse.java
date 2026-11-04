@@ -15,6 +15,4 @@ public class MessageResponse {
 
     private Long profileId;
 
-    private String otp;
-
 }

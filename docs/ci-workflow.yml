@@ -1,0 +1,54 @@
+# GitHub Actions CI Workflow for Collobster
+# To enable this workflow on GitHub Actions, grant the `workflow` scope to your GitHub token
+# or copy this file to `.github/workflows/ci.yml` directly in the GitHub web interface.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  frontend:
+    name: Frontend (Test & Build)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests
+        run: npm test
+
+      - name: Build frontend
+        run: npm run build
+        env:
+          VITE_API_URL: http://localhost:8080
+
+  backend:
+    name: Backend (Compile & Unit Tests)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Compile and run core unit tests
+        working-directory: backend
+        run: mvn -B test -Dtest=AuthenticationSecurityHardeningTest,PlatformAuthorizationMatrixTest,SystemHealthControllerTest
