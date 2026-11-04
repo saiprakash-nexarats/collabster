@@ -1,4 +1,4 @@
-﻿# Collobster Web Application
+# Collobster Web Application
 
 A modern, full-featured web platform for builders, learners, and creators to connect, collaborate, learn, and grow.
 
@@ -46,17 +46,17 @@ The optimized static bundle is generated in the `dist/` directory.
 npm test
 ```
 
-### 5. (Optional) Connect to Live Backend API
+### 5. Connect to Live Backend API
 To synchronize with your backend instead of running in Preview Mode:
 Create a `.env` file in the root directory:
 ```env
-VITE_API_URL=https://collobster-api.onrender.com
+VITE_API_URL=http://localhost:8080
 ```
 Then run `npm run dev` or `npm run build`.
 
 ### Backend runtime
 
-The backend is in `backend/` and requires Java 17. For the local H2 development profile:
+The backend is in `backend/` and requires Java 17. For the local development profile:
 
 ```bash
 cd backend
@@ -73,9 +73,4 @@ Compose intentionally refuses to start when `POSTGRES_PASSWORD` or `JWT_SECRET` 
 
 ### Test database note
 
-The backend contains H2-compatible tests and PostgreSQL integration tests. The PostgreSQL tests currently target a local PostgreSQL instance (mostly `localhost:5433/collabster`), so they require that database before the full Maven suite can pass.
-
-### 6. (Optional) Deploy to Cloudflare Workers / Pages
-```bash
-npx wrangler deploy
-```
+The backend contains H2-compatible tests and PostgreSQL integration tests. The PostgreSQL tests target a local PostgreSQL instance (`localhost:5433/collabster`), requiring that database before the full integration test suite can pass.

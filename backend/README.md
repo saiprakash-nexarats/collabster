@@ -1,7 +1,7 @@
 # 🚀 CollabSphere Backend
 
-![Java](https://img.shields.io/badge/Java-21-orange)
-![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.x-brightgreen)
+![Java](https://img.shields.io/badge/Java-17-orange)
+![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.4-brightgreen)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Database-blue)
 ![Maven](https://img.shields.io/badge/Build-Maven-red)
 ![Status](https://img.shields.io/badge/Status-Active-success)
@@ -13,7 +13,7 @@
 
 CollabSphere is an enterprise collaboration platform that brings together startups, investors, brands, influencers, job seekers, mentors, and communities into a single ecosystem.
 
-The backend is built using **Java 21** and **Spring Boot**, following a modular architecture that is designed to scale from a modular monolith to microservices as the platform grows.
+The backend is built using **Java 17** and **Spring Boot 3.5.4**, following a modular architecture that is designed to scale from a modular monolith to microservices as the platform grows.
 
 ---
 
@@ -168,8 +168,8 @@ The goal of CollabSphere is to build a unified collaboration platform where:
 
 | Category | Technology |
 |----------|------------|
-| Language | Java 21 |
-| Framework | Spring Boot |
+| Language | Java 17 |
+| Framework | Spring Boot 3.5.4 |
 | Security | Spring Security + JWT |
 | ORM | Spring Data JPA + Hibernate |
 | Database | PostgreSQL |
@@ -244,14 +244,14 @@ Future Architecture
 
 ## Prerequisites
 
-- Java 21
+- Java 17
 - Maven
 - PostgreSQL
 
 ## Clone Repository
 
 ```bash
-git clone https://github.com/MadhuriReddy-Nexarats/collabster.git
+git clone https://github.com/saiprakash-nexarats/collabster.git
 ```
 
 ## Build Project
@@ -298,12 +298,6 @@ mvn spring-boot:run
 - Recommendation Engine
 - AI Matching
 - Shared Media Service
-
----
-
-# 👩‍💻 Contributor
-
-**Madhuri Reddy**
 
 ---
 

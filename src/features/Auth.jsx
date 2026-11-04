@@ -524,7 +524,7 @@ export function Auth({ onComplete }) {
   const oauthStart = async (provider) => {
     setError('');
     if (provider.toLowerCase() === 'google') {
-      const backendBase = (import.meta.env?.VITE_API_URL || '').replace(/\/api\/?$/, '').replace(/\/$/, '') || 'https://collobster-for-web-launch-v1-test.onrender.com';
+      const backendBase = (import.meta.env?.VITE_API_URL || '').replace(/\/api\/?$/, '').replace(/\/$/, '') || (typeof window !== 'undefined' ? window.location.origin : '');
       window.location.href = `${backendBase}/oauth2/authorization/google`;
       return;
     }
