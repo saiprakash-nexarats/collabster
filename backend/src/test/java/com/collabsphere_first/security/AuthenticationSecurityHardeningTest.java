@@ -276,4 +276,52 @@ class AuthenticationSecurityHardeningTest {
         // Verify user was still saved (not lost)
         verify(userRepo).save(any(User.class));
     }
+
+    @Test
+    @DisplayName("Item 5: OriginValidationFilter blocks state-changing auth request from untrusted origin (CSRF defense)")
+    void originValidationFilterBlocksUntrustedOrigin() throws Exception {
+        com.collabsphere_first.security.config.OriginValidationFilter filter =
+                new com.collabsphere_first.security.config.OriginValidationFilter("http://localhost:3000,http://localhost:5173");
+
+        // Case 1: Untrusted origin on POST /api/v1/auth/refresh -> 403 Forbidden
+        MockHttpServletRequest evilRequest = new MockHttpServletRequest("POST", "/api/v1/auth/refresh");
+        evilRequest.addHeader("Origin", "http://evil-attacker.com");
+        MockHttpServletResponse evilResponse = new MockHttpServletResponse();
+        jakarta.servlet.FilterChain chain = mock(jakarta.servlet.FilterChain.class);
+
+        filter.doFilter(evilRequest, evilResponse, chain);
+
+        assertThat(evilResponse.getStatus()).isEqualTo(403);
+        assertThat(evilResponse.getContentAsString()).contains("unauthorized origin");
+        verify(chain, never()).doFilter(evilRequest, evilResponse);
+
+        // Case 2: Trusted origin on POST /api/v1/auth/refresh -> 200 / continues chain
+        MockHttpServletRequest goodRequest = new MockHttpServletRequest("POST", "/api/v1/auth/refresh");
+        goodRequest.addHeader("Origin", "http://localhost:5173");
+        MockHttpServletResponse goodResponse = new MockHttpServletResponse();
+
+        filter.doFilter(goodRequest, goodResponse, chain);
+
+        verify(chain).doFilter(goodRequest, goodResponse);
+    }
+
+    @Test
+    @DisplayName("Item 10: AuthExceptionHandler sanitizes generic unhandled exception and never leaks internal details")
+    void authExceptionHandlerSanitizesUnhandledException() {
+        com.collabsphere_first.auth.exception.AuthExceptionHandler handler =
+                new com.collabsphere_first.auth.exception.AuthExceptionHandler();
+
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/v1/auth/login");
+        Exception internalEx = new RuntimeException("SELECT * FROM users WHERE id=1 failed: table corrupted");
+
+        org.springframework.http.ResponseEntity<Object> response = handler.handleException(internalEx, request);
+
+        assertThat(response.getStatusCode().value()).isEqualTo(500);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> body = (Map<String, Object>) response.getBody();
+        assertThat(body).isNotNull();
+        assertThat(body.get("message")).isEqualTo("An unexpected internal error occurred. Please try again later.");
+        assertThat(body.get("message")).asString().doesNotContain("SELECT");
+        assertThat(body.get("message")).asString().doesNotContain("table corrupted");
+    }
 }

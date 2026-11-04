@@ -89,6 +89,11 @@ public class MessagingStompAuthorizationInterceptor implements ChannelIntercepto
                 return message;
             }
 
+            // Yield to Notification and Realtime updates
+            if (destination != null && (destination.equals("/user/queue/notifications") || destination.equals("/user/queue/updates"))) {
+                return message;
+            }
+
             Authentication auth = getAuthentication(accessor.getUser());
             // Clients must subscribe strictly to /user/queue/... - direct subscription to /queue/ is forbidden
             if (destination == null || !ALLOWED_USER_DESTINATIONS.contains(destination)) {

@@ -28,6 +28,7 @@ public class NotificationStompAuthorizationInterceptor implements ChannelInterce
     private static final Set<String> OTHER_ALLOWED_PREFIXES = Set.of(
             "/topic/communities",
             "/app/communities",
+            "/user/queue/updates",
             "/user/queue/messages",
             "/user/queue/message-events",
             "/user/queue/receipts",

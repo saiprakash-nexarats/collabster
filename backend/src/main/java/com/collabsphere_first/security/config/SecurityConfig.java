@@ -78,6 +78,11 @@ public class SecurityConfig {
                 .authenticationProvider(authenticationProvider())
 
                 .addFilterBefore(
+                        new OriginValidationFilter(corsAllowedOrigins),
+                        JwtAuthenticationFilter.class
+                )
+
+                .addFilterBefore(
                         jwtAuthenticationFilter,
                         UsernamePasswordAuthenticationFilter.class
                 )

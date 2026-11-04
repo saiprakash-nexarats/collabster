@@ -122,4 +122,43 @@ class WebSocketSecurityTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Authenticated STOMP session required");
     }
+
+    @Test
+    @DisplayName("SUBSCRIBE frame to raw broker queue /queue/* is strictly rejected")
+    void subscribe_rawBrokerQueueRejected() {
+        StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SUBSCRIBE);
+        accessor.setDestination("/queue/community-updates");
+        accessor.setUser(new UsernamePasswordAuthenticationToken(userPrincipal, null, Collections.emptyList()));
+        Message<?> msg = MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
+
+        assertThatThrownBy(() -> interceptor.preSend(msg, messageChannel))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Direct subscription to broker queues is forbidden");
+    }
+
+    @Test
+    @DisplayName("SEND frame directly to broker /topic/* is strictly rejected")
+    void send_directBrokerTopicRejected() {
+        StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SEND);
+        accessor.setDestination("/topic/communities/" + communityId + "/channels/" + channelId);
+        accessor.setUser(new UsernamePasswordAuthenticationToken(userPrincipal, null, Collections.emptyList()));
+        Message<?> msg = MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
+
+        assertThatThrownBy(() -> interceptor.preSend(msg, messageChannel))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Direct SEND to broker destinations is forbidden");
+    }
+
+    @Test
+    @DisplayName("SUBSCRIBE frame to unlisted user destination is rejected")
+    void subscribe_unauthorizedUserDestinationRejected() {
+        StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SUBSCRIBE);
+        accessor.setDestination("/user/other-user/queue/secret");
+        accessor.setUser(new UsernamePasswordAuthenticationToken(userPrincipal, null, Collections.emptyList()));
+        Message<?> msg = MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
+
+        assertThatThrownBy(() -> interceptor.preSend(msg, messageChannel))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Unauthorized user destination");
+    }
 }

@@ -1,5 +1,7 @@
 package com.collabsphere_first.community.config;
 
+import com.collabsphere_first.messaging.websocket.MessagingStompAuthorizationInterceptor;
+import com.collabsphere_first.notification.security.NotificationStompAuthorizationInterceptor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
@@ -16,6 +18,8 @@ import java.util.Arrays;
 @RequiredArgsConstructor
 public class CommunityWebSocketConfig implements WebSocketMessageBrokerConfigurer {
     private final CommunityStompAuthorizationInterceptor authorizationInterceptor;
+    private final MessagingStompAuthorizationInterceptor messagingInterceptor;
+    private final NotificationStompAuthorizationInterceptor notificationInterceptor;
 
     @Value("${collabster.communities.websocket.allowed-origins:http://localhost:*}")
     private String allowedOrigins;
@@ -66,6 +70,6 @@ public class CommunityWebSocketConfig implements WebSocketMessageBrokerConfigure
 
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
-        registration.interceptors(authorizationInterceptor);
+        registration.interceptors(authorizationInterceptor, messagingInterceptor, notificationInterceptor);
     }
 }

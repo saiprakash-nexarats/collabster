@@ -1,6 +1,7 @@
 package com.collabsphere_first.auth.exception;
 
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -12,6 +13,7 @@ import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+@Slf4j
 @RestControllerAdvice
 public class AuthExceptionHandler {
 
@@ -156,9 +158,10 @@ public class AuthExceptionHandler {
             Exception ex,
             HttpServletRequest request) {
 
+        log.error("Unhandled error processing request to {}: {}", request.getRequestURI(), ex.getMessage(), ex);
         return buildResponse(
                 HttpStatus.INTERNAL_SERVER_ERROR,
-                ex.getMessage(),
+                "An unexpected internal error occurred. Please try again later.",
                 request.getRequestURI()
         );
     }
