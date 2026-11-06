@@ -15,19 +15,24 @@ Collobster is a production-grade, full-stack collaborative platform built for en
 ## Table of Contents
 
 1. [Executive Summary & Value Proposition](#1-executive-summary--value-proposition)
-2. [High-Level Architecture](#2-high-level-architecture)
+2. [High-Level Architecture & System Topology](#2-high-level-architecture--system-topology)
    - [System Topology Diagram](#system-topology-diagram)
    - [Request Flow & Lifecycle](#request-flow--lifecycle)
-3. [Component Architecture](#3-component-architecture)
+3. [Component Architecture & Flow Diagrams](#3-component-architecture--flow-diagrams)
    - [Frontend Client (React 18 + Vite SPA)](#frontend-client-react-18--vite-spa)
+   - [Frontend Architecture Diagram](#frontend-architecture-diagram)
    - [Backend Core (Spring Boot Modular Monolith)](#backend-core-spring-boot-modular-monolith)
+   - [Backend Monolith Architecture Diagram](#backend-monolith-architecture-diagram)
    - [Database & Migration Engine (PostgreSQL 17 + Flyway)](#database--migration-engine-postgresql-17--flyway)
    - [In-Memory State & Caching (Redis 7)](#in-memory-state--caching-redis-7)
    - [Real-Time WebSocket & Presence Engine (STOMP + SockJS)](#real-time-websocket--presence-engine-stomp--sockjs)
+   - [WebSocket & Presence Sequence Diagram](#websocket--presence-sequence-diagram)
    - [Object Storage & Media Pipeline](#object-storage--media-pipeline)
+   - [Two-Phase Object Storage Sequence Diagram](#two-phase-object-storage-sequence-diagram)
    - [AI & Recommendation Subsystem Contract](#ai--recommendation-subsystem-contract)
 4. [Security Architecture & Authorization](#4-security-architecture--authorization)
    - [Authentication & Token Lifecycle](#authentication--token-lifecycle)
+   - [Authentication & Session Versioning Diagram](#authentication--session-versioning-diagram)
    - [Role-Based & Scope-Based Authorization](#role-based--scope-based-authorization)
    - [Storage Security & HMAC Presigned Tickets](#storage-security--hmac-presigned-tickets)
    - [Network Defense & CORS/CSRF Controls](#network-defense--corscsrf-controls)
@@ -44,8 +49,9 @@ Collobster is a production-grade, full-stack collaborative platform built for en
    - [7. Events, Hackathons & QR Ticketing](#7-events-hackathons--qr-ticketing)
    - [8. Target Architecture & Deferred Modules](#8-target-architecture--deferred-modules)
 7. [API Parity & Contract Reference](#7-api-parity--contract-reference)
-8. [DevOps, Docker & Deployment](#8-devops-docker--deployment)
-   - [Docker Compose Deployment](#docker-compose-deployment)
+8. [DevOps, Docker & Deployment Architecture](#8-devops-docker--deployment-architecture)
+   - [Docker Container Topology Diagram](#docker-container-topology-diagram)
+   - [Docker Compose Deployment Guide](#docker-compose-deployment-guide)
    - [Nginx Edge Reverse Proxy](#nginx-edge-reverse-proxy)
    - [Environment Variables (.env.example Reference)](#environment-variables-envexample-reference)
 9. [Local Development & Quick Start](#9-local-development--quick-start)
@@ -71,7 +77,7 @@ Collobster solves the fragmentation of modern engineering collaboration. Instead
 
 ---
 
-## 2. High-Level Architecture
+## 2. High-Level Architecture & System Topology
 
 Collobster follows a **Canonical Multi-Tier Client-Server Architecture** featuring an Nginx edge proxy, a Single-Page Application (SPA) frontend, an enterprise Spring Boot 3.5 modular monolith, PostgreSQL 17 relational database, Redis 7 in-memory cache/broker, and an abstraction layer for cloud/local object storage.
 
@@ -116,7 +122,7 @@ flowchart TD
         FastAPI["FastAPI Recommendation Service\n(Internal HTTP Contract\n/api/v1/internal/recommend/*)"]
     end
 
-    Client -->|HTTP/HTTPS| Nginx
+    Client -->|HTTP / HTTPS| Nginx
     Client -->|WSS (WebSockets)| Nginx
     Nginx -->|Serves Static Files| SPA
     Nginx -->|Proxies /api/* & /v1/*| SecFilterChain
@@ -151,7 +157,7 @@ flowchart TD
 
 ---
 
-## 3. Component Architecture
+## 3. Component Architecture & Flow Diagrams
 
 ### Frontend Client (React 18 + Vite SPA)
 
@@ -160,22 +166,66 @@ The frontend is an ultra-fast, zero-bloat Single Page Application built on **Rea
 - **Entry Point & Bootstrapping**: `src/main.jsx` initializes the root DOM, wraps the application with error boundaries, and mounts `src/App.jsx`.
 - **Client-Side Routing (`src/router.js`)**:
   - Implements a declarative router built on HTML5 History API (`pushState`, `replaceState`, `popstate`).
-  - Supports deep linking with automatic synchronization:
-    - `/feed` & `/feed?post=:id` &rarr; Social discovery and discussions.
-    - `/community` & `/community/:id` &rarr; Community circles and channel chat.
-    - `/spaces` & `/spaces/:projectId` &rarr; Project management and code workspace.
-    - `/companies` & `/companies/:companyId` &rarr; Startup formation, equity, and documents.
-    - `/messages` & `/messages/:conversationId` &rarr; Direct messaging and group threads.
-    - `/learn`, `/services`, `/mentor`, `/careers`, `/events`.
+  - Supports deep linking with automatic synchronization across `/feed`, `/community`, `/spaces`, `/companies`, and `/messages`.
 - **Dual-Mode State Machine (`src/store.js` & `src/context.js`)**:
-  - **Offline Preview Mode**: Uses in-memory state seeded with rich, realistic mock datasets (`src/data.js`). State updates mutate local reactive stores and persist to `localStorage`, allowing 100% functionality without backend connectivity.
+  - **Offline Preview Mode**: Uses in-memory state seeded with rich, realistic mock datasets (`src/data.js`). State updates persist to `localStorage`.
   - **Live Cloud Mode**: Activated automatically when authenticated against a live backend API (`VITE_API_URL`). Interacts exclusively with REST endpoints via `src/api.js`.
 - **API Client Layer (`src/api.js`)**:
-  - Centralized, strongly-typed HTTP abstraction handling JWT headers, token refresh on 401, error normalization, and fallback prevention.
-  - Guarantees that authenticated users are never deceptively redirected to mock data if an API request fails; real errors are propagated to the user.
+  - Centralized, strongly-typed HTTP abstraction handling JWT headers, silent token refresh on 401, error normalization, and fallback prevention.
 - **Real-Time WebSocket Client (`src/realtime.js`)**:
   - STOMP client over SockJS with exponential reconnection backoff (1s &rarr; 2s &rarr; 5s &rarr; 30s max).
-  - Subscribes to user queues (`/user/queue/notifications`, `/user/queue/messages`) and public topics (`/topic/community.{id}`).
+
+### Frontend Architecture Diagram
+
+```mermaid
+flowchart TD
+    subgraph Browser["Client Browser Window"]
+        DOM["HTML5 DOM & App Root"]
+        HistoryAPI["HTML5 History API (pushState / popstate)"]
+    end
+
+    subgraph RouterLayer["Routing & Navigation (src/router.js)"]
+        Router["Declarative Client Router"]
+        RouteGuards["Route Guard & Auth State Check"]
+    end
+
+    subgraph ViewLayer["Feature Presentation Layer"]
+        FeedView["Feed & Social (Feed.jsx)"]
+        SpacesView["Projects & Code IDE (Spaces.jsx)"]
+        CompanyView["Companies & Document Vault (CompanyRedesign.jsx)"]
+        ChatView["Direct & Group Messaging (Inbox.jsx)"]
+        CirclesView["Communities & Channels (Dialogs.jsx)"]
+    end
+
+    subgraph StateLayer["Dual-Mode State Management"]
+        Context["Global State Provider (context.js)"]
+        Store["Reactive Store (store.js)"]
+        
+        subgraph ModeSwitch["Operational Modes"]
+            OfflineMode["Offline Preview Engine\n- Local Storage Cache\n- Mock Seeds (data.js)"]
+            LiveMode["Live Cloud Engine\n- Authenticated HTTP State\n- Optimistic UI Updates"]
+        end
+    end
+
+    subgraph NetworkLayer["Communications & Transport"]
+        ApiClient["REST API Client (api.js)\n- Bearer JWT Injection\n- Silent 401 Token Refresh\n- Error Normalization"]
+        RealtimeClient["WebSocket Client (realtime.js)\n- STOMP over SockJS\n- Exponential Backoff\n- Heartbeat & Queue Handler"]
+    end
+
+    DOM --> RouterLayer
+    HistoryAPI <--> Router
+    Router --> RouteGuards
+    RouteGuards --> ViewLayer
+    ViewLayer --> Context
+    Context --> Store
+    Store --> ModeSwitch
+    OfflineMode --> DOM
+    LiveMode --> NetworkLayer
+    ApiClient -->|HTTP REST| BackendAPI["Spring Boot Backend (:8080)"]
+    RealtimeClient -->|WSS STOMP| WebSocketEndpoint["WebSocket Endpoint (:8080/ws)"]
+```
+
+---
 
 ### Backend Core (Spring Boot Modular Monolith)
 
@@ -212,6 +262,82 @@ backend/src/main/java/com/collabsphere_first/
 └── workspace/        # Cross-cutting workspace access control contract
 ```
 
+### Backend Monolith Architecture Diagram
+
+```mermaid
+flowchart TD
+    ClientReq["Incoming HTTP / WSS Request"] --> FilterChain
+
+    subgraph SecurityTier["Security & Filter Chain Layer"]
+        FilterChain["Spring Security 6.0 Chain"]
+        CorsFilter["CorsFilter (Origin Whitelist)"]
+        CsrfFilter["CsrfOriginFilter (Same-Origin Defense)"]
+        JwtFilter["JwtAuthenticationFilter (Bearer Signature & Claims)"]
+        SessionCheck["Session Version Validator (Redis Cached Key)"]
+        
+        FilterChain --> CorsFilter --> CsrfFilter --> JwtFilter --> SessionCheck
+    end
+
+    SessionCheck --> Dispatcher["Spring MVC DispatcherServlet"]
+
+    subgraph ControllerTier["REST Controllers Layer"]
+        AuthCtrl["AuthController\n(/api/v1/auth/*)"]
+        ProjCtrl["ProjectController\n(/v1/projects/*)"]
+        CompCtrl["CompanyController\n(/v1/companies/*)"]
+        MsgCtrl["MessagingController\n(/api/v1/messages/*)"]
+        CommCtrl["CommunityController\n(/api/v1/communities/*)"]
+        StorCtrl["StorageController\n(/api/v1/storage/*)"]
+    end
+
+    Dispatcher --> ControllerTier
+
+    subgraph ServiceTier["Domain Business Services (@Transactional)"]
+        AuthSvc["AuthService & TokenProvider"]
+        ProjSvc["ProjectServiceImpl\n(Owner / Maintainer / Collaborator / Viewer RBAC)"]
+        CompSvc["CompanyServiceImpl\n(Owner / Admin / Member Scopes)"]
+        MsgSvc["MessagingServiceImpl\n(Conversation Membership & Star Invariants)"]
+        CommSvc["CommunityServiceImpl\n(Moderation & Channels)"]
+        StorSvc["StorageManagementServiceImpl\n(HMAC Signing & Atomic Upload Claim)"]
+    end
+
+    AuthCtrl --> AuthSvc
+    ProjCtrl --> ProjSvc
+    CompCtrl --> CompSvc
+    MsgCtrl --> MsgSvc
+    CommCtrl --> CommSvc
+    StorCtrl --> StorSvc
+
+    subgraph AccessContracts["Cross-Cutting Access Control"]
+        WorkspaceCheck["WorkspaceAccessChecker Interface\n(Validates Project & Company Membership)"]
+    end
+
+    ProjSvc -.-> WorkspaceCheck
+    CompSvc -.-> WorkspaceCheck
+    StorSvc -.-> WorkspaceCheck
+
+    subgraph DataAccessTier["Persistence & Data Access Layer"]
+        JPA["Spring Data JPA Repositories (Hibernate ORM)"]
+        RedisTemplate["RedisTemplate (Lettuce Driver)"]
+        LocalFileIO["Local File Storage Manager"]
+    end
+
+    ServiceTier --> JPA
+    ServiceTier --> RedisTemplate
+    StorSvc --> LocalFileIO
+
+    subgraph PhysicalStorage["Physical Data & Storage Tier"]
+        PostgresDB[("PostgreSQL 17 Database\n- Relational Master Data\n- 36 Flyway Migrations")]
+        RedisStore[("Redis 7 In-Memory Store\n- Session Revocation Keys\n- OTP Nonces & Rate Limits")]
+        FileSystem[("Disk / Object Storage\n- Uploads Directory / Bucket")]
+    end
+
+    JPA --> PostgresDB
+    RedisTemplate --> RedisStore
+    LocalFileIO --> FileSystem
+```
+
+---
+
 ### Database & Migration Engine (PostgreSQL 17 + Flyway)
 
 - **PostgreSQL 17**: The sole durable system of record.
@@ -219,7 +345,9 @@ backend/src/main/java/com/collabsphere_first/
   - Enforce strict foreign key constraints with `ON DELETE CASCADE` where child ownership is absolute (e.g., project tasks, comments).
   - Use composite unique indexes to prevent race-condition duplicates (e.g., duplicate reactions, multiple active RSVPs, duplicate stars).
   - Utilize B-Tree and GIN indexes for keyset pagination and full-text exploration.
-  - Completely avoid breaking in-place modifications; all schema enhancements follow expanding-and-contracting migration patterns.
+  - Avoid breaking in-place modifications; all schema enhancements follow expanding-and-contracting migration patterns.
+
+---
 
 ### In-Memory State & Caching (Redis 7)
 
@@ -230,13 +358,45 @@ Redis 7 serves as the platform's high-speed, volatile data tier:
 - **Rate Limiting Buckets**: Sliding-window rate limit tokens per IP and per authenticated user.
 - **Live User Presence**: Heartbeat tracking keyrings for active community channels and direct chats.
 
+---
+
 ### Real-Time WebSocket & Presence Engine (STOMP + SockJS)
 
-- Configured in `WebSocketConfig.java` with endpoints:
-  - `/ws` & `/ws/community` with SockJS fallback.
-  - Application Destination Prefix: `/app`.
-  - Message Broker Prefixes: `/topic`, `/queue`.
+- Configured in `WebSocketConfig.java` with endpoints `/ws` and `/ws/community` with SockJS fallback.
+- Application Destination Prefix: `/app`, Message Broker Prefixes: `/topic`, `/queue`.
 - **Channel Security**: Inbound channel interceptor validates user JWT before STOMP `CONNECT` and verifies workspace/conversation membership before permitting STOMP `SUBSCRIBE`.
+
+### WebSocket & Presence Sequence Diagram
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client as Web Client (realtime.js)
+    participant Nginx as Nginx Proxy (:80)
+    participant WS as WebSocket Handshake Endpoint
+    participant Auth as Channel Inbound Interceptor
+    participant Broker as STOMP Broker (/topic, /queue)
+    participant Redis as Redis Presence Store
+
+    Client->>Nginx: HTTP Upgrade GET /ws/community
+    Nginx->>WS: Upgrade to WebSocket protocol
+    WS-->>Client: 101 Switching Protocols (Connection Established)
+    
+    Client->>Auth: STOMP CONNECT (Passcode: Bearer JWT)
+    Auth->>Auth: Validate JWT & User Session
+    Auth->>Redis: Set user presence key (TTL: 60s)
+    Auth-->>Client: STOMP CONNECTED (Heartbeat: 10s/10s)
+
+    Client->>Broker: STOMP SUBSCRIBE /topic/community.123
+    Broker->>Auth: Validate Community Membership
+    Auth-->>Broker: Permitted
+    Broker-->>Client: STOMP RECEIPT (Subscribed)
+
+    Note over Client,Redis: Incoming Channel Message Broadcast
+    Broker->>Client: STOMP MESSAGE /topic/community.123 (JSON payload)
+```
+
+---
 
 ### Object Storage & Media Pipeline
 
@@ -255,6 +415,44 @@ Collobster implements a **Secure Two-Phase Object Storage Architecture**:
 3. **Scoped Download (`GET /api/v1/storage/files/{id}/download`)**:
    - Enforces workspace/company access rules and document visibility scopes (`admin_only` documents are restricted to company admins/owners).
 
+### Two-Phase Object Storage Sequence Diagram
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client as Web Client
+    participant API as Storage Controller
+    participant Svc as Storage Service
+    participant DB as PostgreSQL
+    participant Disk as Local Disk / S3
+
+    Note over Client,Disk: Step 1: Upload Initiation
+    Client->>API: POST /api/v1/storage/upload/init (filename, mimeType, size)
+    API->>Svc: Validate MIME type & file size quota
+    Svc->>DB: Insert StorageObject (upload_state = PENDING)
+    Svc->>Svc: Generate HMAC-SHA256 signature ticket
+    Svc-->>Client: 200 OK + Signed Upload Ticket & URL
+
+    Note over Client,Disk: Step 2: Direct Streaming Upload
+    Client->>API: PUT /api/v1/storage/upload/direct/{id} (HMAC Ticket Header + Raw Bytes)
+    API->>Svc: Verify ticket signature & expiration timestamp
+    Svc->>DB: Atomic Update: state PENDING -> UPLOADING (Lock acquired)
+    alt Already Uploaded or Replayed
+        Svc-->>Client: 409 Conflict / 403 Forbidden (Replay Rejected)
+    else State transition successful
+        Svc->>Disk: Stream binary bytes directly to disk/bucket
+        alt Upload Succeeded
+            Svc->>DB: Verify byte count & update state -> COMPLETED
+            Svc-->>Client: 200 OK (Object Ready)
+        else Upload Failed / Aborted
+            Svc->>DB: Update state -> FAILED (Session Invalidated)
+            Svc-->>Client: 500 Error (Cannot be replayed)
+        end
+    end
+```
+
+---
+
 ### AI & Recommendation Subsystem Contract
 
 The platform defines protected internal HTTP contracts for a dedicated FastAPI recommendation service:
@@ -267,42 +465,49 @@ The platform defines protected internal HTTP contracts for a dedicated FastAPI r
 
 ## 4. Security Architecture & Authorization
 
-Collobster adheres to modern OWASP security standards:
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor User as Client Browser
-    participant Nginx as Nginx Proxy
-    participant Sec as Security Filter Chain
-    participant Auth as Auth Controller
-    participant DB as PostgreSQL
-    participant Redis as Redis Cache
-
-    Note over User,Redis: 1. Authentication Handshake
-    User->>Nginx: POST /api/v1/auth/login (email, password)
-    Nginx->>Sec: Route upstream
-    Sec->>Auth: Dispatch login
-    Auth->>DB: Query user by email & verify BCrypt hash
-    Auth->>Redis: Set active session version
-    Auth-->>User: 200 OK + Bearer JWT (Access Token) + Set-Cookie (Refresh Token HttpOnly)
-
-    Note over User,Redis: 2. Authenticated Business Request
-    User->>Nginx: GET /api/v1/projects/{id}/files (Bearer JWT)
-    Nginx->>Sec: Intercept request
-    Sec->>Sec: Validate JWT Signature & Expiration
-    Sec->>Redis: Check Session Version (Not Revoked)
-    Sec->>Sec: Populate SecurityContext (User ID, Roles)
-    Sec->>DB: Check Project Member Role (Owner / Maintainer / Collaborator / Viewer)
-    DB-->>Sec: Access Granted
-    Sec-->>User: 200 OK (Project Files Data)
-```
-
 ### Authentication & Token Lifecycle
 
 - **Access Token**: Stateless HMAC-SHA256 JWT, 15-minute expiration, contains user ID, email, role, and session version.
 - **Refresh Token**: Stored in a secure `HttpOnly`, `SameSite=Strict`, `Secure` cookie with a 7-day expiration. Stored as an SHA-256 hash in PostgreSQL table `refresh_tokens`.
 - **Global Logout & Revocation**: Calling `/api/v1/auth/logout` revokes the refresh token in the database and increments `user:session_version` in Redis, instantly invalidating all outstanding access tokens across all devices.
+
+### Authentication & Session Versioning Diagram
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as Client Browser
+    participant Auth as Auth Controller
+    participant DB as PostgreSQL
+    participant Redis as Redis Cache
+    participant API as Protected API Endpoint
+
+    Note over User,Redis: 1. User Login Handshake
+    User->>Auth: POST /api/v1/auth/login (email, password)
+    Auth->>DB: Verify BCrypt password hash
+    Auth->>DB: Insert hashed Refresh Token
+    Auth->>Redis: Ensure session version initialized (e.g., v=1)
+    Auth-->>User: Return Access Token (JWT with v=1) + Set-Cookie (HttpOnly Refresh Token)
+
+    Note over User,API: 2. Authenticated Request Execution
+    User->>API: GET /v1/projects (Bearer Access Token v=1)
+    API->>API: Validate JWT signature & expiration
+    API->>Redis: Fetch current user:session_version
+    alt Session Version Matches (v=1)
+        API-->>User: 200 OK (Data Response)
+    else Session Version Mismatch (v != 1)
+        API-->>User: 401 Unauthorized (Token Revoked)
+    end
+
+    Note over User,Redis: 3. Global Logout / Password Reset
+    User->>Auth: POST /api/v1/auth/logout
+    Auth->>DB: Delete/Revoke Refresh Token
+    Auth->>Redis: Increment user:session_version (v=1 -> v=2)
+    Auth-->>User: 200 OK (Cleared Cookie)
+    Note over User,API: All previous access tokens (v=1) are now instantly invalid everywhere!
+```
+
+---
 
 ### Role-Based & Scope-Based Authorization
 
@@ -475,11 +680,57 @@ Every frontend operation in `src/api.js` has been formally audited against the b
 
 ---
 
-## 8. DevOps, Docker & Deployment
+## 8. DevOps, Docker & Deployment Architecture
 
 The repository includes a production-ready **Docker Compose** orchestration stack.
 
-### Docker Compose Deployment
+### Docker Container Topology Diagram
+
+```mermaid
+flowchart TD
+    subgraph Host["Host Machine Environment"]
+        HostPort80["Host Port :80"]
+        HostPort5173["Host Port :5173"]
+        HostPort5432["Host Port :5432 (Optional Dev)"]
+        HostPort6379["Host Port :6379 (Optional Dev)"]
+        HostPort8080["Host Port :8080 (Optional Dev)"]
+
+        subgraph DockerNetwork["Isolated Bridge Network: collobster-network"]
+            NginxContainer["collobster-frontend\n(Nginx Alpine)\n- Port 80 exposed\n- Serves built Vite static assets\n- Proxies API & WebSocket upstream"]
+            
+            BackendContainer["collobster-backend\n(Spring Boot 3.5 on Temurin 21 JRE)\n- Port 8080 exposed\n- Connected to Postgres & Redis\n- Uploads volume mounted"]
+            
+            PostgresContainer["collobster-postgres\n(PostgreSQL 17 Alpine)\n- Port 5432\n- Healthcheck: pg_isready"]
+            
+            RedisContainer["collobster-redis\n(Redis 7 Alpine)\n- Port 6379\n- Healthcheck: redis-cli ping\n- AOF persistence enabled"]
+        end
+
+        subgraph NamedVolumes["Docker Named Volumes"]
+            VolPG[("collobster_postgres_data\n(/var/lib/postgresql/data)")]
+            VolRD[("collobster_redis_data\n(/data)")]
+            VolUploads[("collobster_backend_uploads\n(/app/uploads)")]
+        end
+    end
+
+    HostPort80 --> NginxContainer
+    HostPort5173 --> NginxContainer
+    HostPort8080 -.-> BackendContainer
+    HostPort5432 -.-> PostgresContainer
+    HostPort6379 -.-> RedisContainer
+
+    NginxContainer -->|proxy_pass :8080/api/| BackendContainer
+    NginxContainer -->|proxy_pass :8080/v1/| BackendContainer
+    NginxContainer -->|proxy_pass :8080/ws/| BackendContainer
+
+    BackendContainer -->|JDBC connection| PostgresContainer
+    BackendContainer -->|Lettuce connection| RedisContainer
+
+    PostgresContainer --- VolPG
+    RedisContainer --- VolRD
+    BackendContainer --- VolUploads
+```
+
+### Docker Compose Deployment Guide
 
 ```bash
 # 1. Clone repository

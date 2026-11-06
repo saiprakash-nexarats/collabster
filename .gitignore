@@ -24,3 +24,5 @@ scratch/
 **/android/local.properties
 .idea/
 **/.idea/
+.vscode/
+**/.vscode/
