@@ -78,13 +78,13 @@ public class SecurityConfig {
                 .authenticationProvider(authenticationProvider())
 
                 .addFilterBefore(
-                        jwtAuthenticationFilter,
+                        new OriginValidationFilter(corsAllowedOrigins),
                         UsernamePasswordAuthenticationFilter.class
                 )
 
                 .addFilterBefore(
-                        new OriginValidationFilter(corsAllowedOrigins),
-                        JwtAuthenticationFilter.class
+                        jwtAuthenticationFilter,
+                        UsernamePasswordAuthenticationFilter.class
                 )
 
                 .authorizeHttpRequests(auth -> auth
@@ -128,7 +128,7 @@ public class SecurityConfig {
                 .exceptionHandling(ex -> ex
                         .defaultAuthenticationEntryPointFor(
                                 new org.springframework.security.web.authentication.HttpStatusEntryPoint(org.springframework.http.HttpStatus.UNAUTHORIZED),
-                                request -> request.getRequestURI() != null && request.getRequestURI().startsWith("/api")
+                                request -> request.getRequestURI() != null && (request.getRequestURI().startsWith("/api") || request.getRequestURI().startsWith("/v1"))
                         )
                 );
 

@@ -5,6 +5,7 @@ import com.collabsphere_first.storage.enums.UploadState;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.springframework.data.domain.Persistable;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -20,10 +21,9 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class StorageObject {
+public class StorageObject implements Persistable<UUID> {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.AUTO)
     private UUID id;
 
     @Column(name = "owner_id", nullable = false)
@@ -76,5 +76,10 @@ public class StorageObject {
 
     @Column(name = "deleted_at")
     private Instant deletedAt;
+
+    @Override
+    public boolean isNew() {
+        return createdAt == null;
+    }
 }
 

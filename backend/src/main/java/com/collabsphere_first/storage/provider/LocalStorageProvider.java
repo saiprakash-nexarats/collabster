@@ -10,12 +10,14 @@ import org.springframework.stereotype.Component;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.nio.file.StandardOpenOption;
+import java.nio.file.*;
 import java.util.UUID;
 
+/**
+ * Local filesystem-backed ObjectStorageProvider.
+ * Implements strict root containment, symlink attack detection, safe temporary-file staging (.part),
+ * non-executable file permissions, and overwrite prevention with verified atomic moves.
+ */
 @Slf4j
 @Component
 public class LocalStorageProvider implements ObjectStorageProvider {
@@ -23,9 +25,9 @@ public class LocalStorageProvider implements ObjectStorageProvider {
     private final Path rootPath;
     private final FileContentInspector contentInspector;
 
-    public LocalStorageProvider(StorageProperties storageProperties, FileContentInspector contentInspector) {
+    public LocalStorageProvider(StorageProperties properties, FileContentInspector contentInspector) {
         this.contentInspector = contentInspector;
-        String dir = storageProperties.getUploadDir();
+        String dir = properties.getUploadDir();
         if (dir == null || dir.isBlank()) {
             dir = "uploads";
         }
@@ -47,7 +49,22 @@ public class LocalStorageProvider implements ObjectStorageProvider {
         Path targetPath = resolveSafePath(storageKey);
         Path tempPath = null;
         try {
-            Files.createDirectories(targetPath.getParent());
+            Path parentDir = targetPath.getParent();
+            if (parentDir != null) {
+                Files.createDirectories(parentDir);
+                // Verify real path of parent directory does not escape storage root via symlinks
+                Path realParent = parentDir.toRealPath();
+                Path realRoot = rootPath.toRealPath();
+                if (!realParent.startsWith(realRoot)) {
+                    throw new InvalidUploadException("Parent directory escapes storage root via symlink: " + storageKey);
+                }
+            }
+
+            // Verify target destination does NOT already exist (prevent overwriting completed objects)
+            if (Files.exists(targetPath, LinkOption.NOFOLLOW_LINKS)) {
+                throw new InvalidUploadException("Target file already exists on storage backend and cannot be overwritten: " + storageKey);
+            }
+
             // Safe temporary-file writes: stage file in .part file first
             tempPath = targetPath.getParent().resolve(".upload_" + UUID.randomUUID() + ".part");
 
@@ -60,18 +77,27 @@ public class LocalStorageProvider implements ObjectStorageProvider {
                 }
             }
 
-            // File content inspection & security check
+            // File content inspection & security check against approved MIME type
             contentInspector.inspectFileContent(tempPath, contentType);
 
             // Ensure stored file is not executable
             tempPath.toFile().setExecutable(false, false);
 
-            // Atomic publication
+            // Verified publication: check destination does not exist immediately prior to move
+            if (Files.exists(targetPath, LinkOption.NOFOLLOW_LINKS)) {
+                throw new InvalidUploadException("Destination already exists prior to atomic publication: " + storageKey);
+            }
+
+            // Atomic publication without blind replacement
             try {
-                Files.move(tempPath, targetPath, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+                Files.move(tempPath, targetPath, StandardCopyOption.ATOMIC_MOVE);
             } catch (IOException atomicEx) {
-                // Fallback if filesystem does not support ATOMIC_MOVE
-                Files.move(tempPath, targetPath, StandardCopyOption.REPLACE_EXISTING);
+                // Fallback for filesystems that do not support ATOMIC_MOVE across volume boundaries.
+                // Verify destination does not exist and perform safe move without replacement.
+                if (Files.exists(targetPath, LinkOption.NOFOLLOW_LINKS)) {
+                    throw new InvalidUploadException("Destination already exists on move fallback: " + storageKey);
+                }
+                Files.move(tempPath, targetPath);
             }
 
             log.debug("Stored verified object at key: {}, size: {}", storageKey, Files.size(targetPath));
@@ -109,11 +135,11 @@ public class LocalStorageProvider implements ObjectStorageProvider {
     @Override
     public long getObjectSize(String storageKey) {
         Path targetPath = resolveSafePath(storageKey);
-        try {
-            if (Files.exists(targetPath) && Files.isRegularFile(targetPath)) {
-                return Files.size(targetPath);
-            }
+        if (!Files.exists(targetPath) || !Files.isRegularFile(targetPath)) {
             return 0L;
+        }
+        try {
+            return Files.size(targetPath);
         } catch (IOException e) {
             log.warn("Failed to check file size for: {}", storageKey, e);
             return 0L;
@@ -152,6 +178,16 @@ public class LocalStorageProvider implements ObjectStorageProvider {
         if (!resolved.startsWith(rootPath)) {
             throw new InvalidUploadException("Resolved path escapes configured storage root: " + storageKey);
         }
+
+        // Walk path components to detect symbolic links
+        Path check = resolved;
+        while (check != null && !check.equals(rootPath)) {
+            if (Files.exists(check, LinkOption.NOFOLLOW_LINKS) && Files.isSymbolicLink(check)) {
+                throw new InvalidUploadException("Symbolic link detected in path: " + storageKey);
+            }
+            check = check.getParent();
+        }
+
         return resolved;
     }
 }

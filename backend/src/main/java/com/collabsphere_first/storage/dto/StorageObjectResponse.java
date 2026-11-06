@@ -15,6 +15,9 @@ import java.util.UUID;
 public class StorageObjectResponse {
     private UUID id;
     private UUID objectId;
+    private Long ownerId;
+    private UUID workspaceId;
+    private String storageProvider;
     private String filename;
     private String contentType;
     private Long verifiedBytes;
@@ -23,7 +26,7 @@ public class StorageObjectResponse {
     private String storageKey;
     private String downloadUrl;
     private String checksum;
+    private Instant expiresAt;
     private Instant createdAt;
     private Instant completedAt;
 }
-
