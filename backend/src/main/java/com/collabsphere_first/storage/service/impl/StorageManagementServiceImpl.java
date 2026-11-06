@@ -57,6 +57,9 @@ public class StorageManagementServiceImpl implements StorageManagementService {
     private final StorageTransactionCoordinator transactionCoordinator;
     private final String signingSecret;
 
+    @Autowired(required = false)
+    private java.util.List<com.collabsphere_first.workspace.service.WorkspaceAccessChecker> accessCheckers;
+
     @Autowired
     public StorageManagementServiceImpl(
             StorageProperties properties,
@@ -402,6 +405,20 @@ public class StorageManagementServiceImpl implements StorageManagementService {
     }
 
     private boolean isUserAuthorizedForWorkspace(Long userId, UUID workspaceId) {
+        if (userId == null || workspaceId == null) {
+            return false;
+        }
+        if (accessCheckers != null) {
+            for (com.collabsphere_first.workspace.service.WorkspaceAccessChecker checker : accessCheckers) {
+                try {
+                    if (checker.isAuthorized(workspaceId, userId)) {
+                        return true;
+                    }
+                } catch (Exception e) {
+                    log.debug("Workspace authorization checker threw exception: {}", e.getMessage());
+                }
+            }
+        }
         return false;
     }
 
