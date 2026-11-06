@@ -1,5 +1,6 @@
 package com.collabsphere_first.storage.config;
 
+import jakarta.annotation.PostConstruct;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
@@ -47,6 +48,14 @@ public class StorageProperties {
 
     private S3Properties s3 = new S3Properties();
 
+    @PostConstruct
+    public void validateConfiguration() {
+        String prov = provider == null ? "local" : provider.trim().toLowerCase();
+        if (!prov.equals("local")) {
+            throw new IllegalStateException("Storage provider '" + provider + "' is configured, but only 'local' object storage is supported in this deployment. Production must not silently fall back to local storage when S3/managed is configured.");
+        }
+    }
+
     @Data
     public static class S3Properties {
         private String endpoint = "";
@@ -56,4 +65,3 @@ public class StorageProperties {
         private String secretKey = "";
     }
 }
-

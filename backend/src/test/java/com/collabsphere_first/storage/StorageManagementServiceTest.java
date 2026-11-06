@@ -12,6 +12,7 @@ import com.collabsphere_first.storage.exception.InvalidUploadException;
 import com.collabsphere_first.storage.exception.StorageAccessDeniedException;
 import com.collabsphere_first.storage.exception.StorageObjectNotFoundException;
 import com.collabsphere_first.storage.exception.UploadExpiredException;
+import com.collabsphere_first.storage.provider.FileContentInspector;
 import com.collabsphere_first.storage.provider.LocalStorageProvider;
 import com.collabsphere_first.storage.repository.StorageObjectRepository;
 import com.collabsphere_first.storage.service.impl.StorageManagementServiceImpl;
@@ -24,18 +25,22 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Base64;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -65,8 +70,19 @@ class StorageManagementServiceTest {
         properties.setMaxFileSizeBytes(25 * 1024 * 1024L);
         properties.setUploadExpirationMinutes(15);
 
-        localStorageProvider = new LocalStorageProvider(properties);
+        localStorageProvider = new LocalStorageProvider(properties, new FileContentInspector());
         storageService = new StorageManagementServiceImpl(properties, repository, localStorageProvider, signingSecret);
+    }
+
+    private String generateSignature(UUID objectId, long expiresEpoch) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(signingSecret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            byte[] hash = mac.doFinal((objectId + ":" + expiresEpoch).getBytes(StandardCharsets.UTF_8));
+            return Base64.getUrlEncoder().withoutPadding().encodeToString(hash);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Nested
@@ -109,6 +125,21 @@ class StorageManagementServiceTest {
             assertThatThrownBy(() -> storageService.requestUpload(req, null))
                     .isInstanceOf(StorageAccessDeniedException.class)
                     .hasMessageContaining("Authenticated user required");
+        }
+
+        @Test
+        @DisplayName("Unauthorized workspace ID in upload request is rejected with 403")
+        void requestUpload_unauthorizedWorkspace_rejected() {
+            UploadInitiationRequest req = UploadInitiationRequest.builder()
+                    .filename("doc.pdf")
+                    .contentType("application/pdf")
+                    .contentLength(500L)
+                    .workspaceId(UUID.randomUUID())
+                    .build();
+
+            assertThatThrownBy(() -> storageService.requestUpload(req, ownerId))
+                    .isInstanceOf(StorageAccessDeniedException.class)
+                    .hasMessageContaining("Workspace-scoped uploads require verified workspace membership");
         }
 
         @Test
@@ -189,9 +220,10 @@ class StorageManagementServiceTest {
                     .isDeleted(false)
                     .build();
             when(repository.findByIdAndIsDeletedFalse(ticketId)).thenReturn(Optional.of(ticketObject));
+            when(repository.claimUploadSession(eq(ticketId), any(Instant.class))).thenReturn(1);
 
             byte[] fileBytes = "Hello Collab!".getBytes(StandardCharsets.UTF_8);
-            storageService.handleDirectUpload(ticketId, new ByteArrayInputStream(fileBytes), "text/plain", (long) fileBytes.length, expires, signature);
+            storageService.handleDirectUpload(ticketId, new ByteArrayInputStream(fileBytes), "text/plain", 13L, expires, signature);
 
             // Verify file exists on disk
             assertThat(localStorageProvider.objectExists(ticket.getStorageKey())).isTrue();
@@ -236,6 +268,66 @@ class StorageManagementServiceTest {
         }
 
         @Test
+        @DisplayName("Direct PUT on completed object is rejected (prevents overwriting)")
+        void handleDirectUpload_alreadyCompleted_rejected() {
+            UUID objectId = UUID.randomUUID();
+            Instant expiresAt = Instant.now().plus(15, ChronoUnit.MINUTES);
+            long expires = expiresAt.getEpochSecond();
+
+            StorageObject completedObject = StorageObject.builder()
+                    .id(objectId)
+                    .ownerId(ownerId)
+                    .storageKey("uploads/completed.txt")
+                    .filename("completed.txt")
+                    .contentType("text/plain")
+                    .expectedBytes(10L)
+                    .verifiedBytes(10L)
+                    .uploadState(UploadState.COMPLETED)
+                    .expiresAt(expiresAt)
+                    .isDeleted(false)
+                    .build();
+
+            when(repository.findByIdAndIsDeletedFalse(objectId)).thenReturn(Optional.of(completedObject));
+            String signature = generateSignature(objectId, expires);
+
+            byte[] bytes = "New content".getBytes(StandardCharsets.UTF_8);
+            assertThatThrownBy(() -> storageService.handleDirectUpload(objectId, new ByteArrayInputStream(bytes),
+                    "text/plain", (long) bytes.length, expires, signature))
+                    .isInstanceOf(InvalidUploadException.class)
+                    .hasMessageContaining("already been completed and cannot be reused or overwritten");
+        }
+
+        @Test
+        @DisplayName("Direct PUT with mismatched Content-Length header is rejected")
+        void handleDirectUpload_contentLengthMismatch_rejected() {
+            UUID objectId = UUID.randomUUID();
+            Instant expiresAt = Instant.now().plus(15, ChronoUnit.MINUTES);
+            long expires = expiresAt.getEpochSecond();
+
+            StorageObject pendingObject = StorageObject.builder()
+                    .id(objectId)
+                    .ownerId(ownerId)
+                    .storageKey("uploads/pending.txt")
+                    .filename("pending.txt")
+                    .contentType("text/plain")
+                    .expectedBytes(100L)
+                    .uploadState(UploadState.PENDING)
+                    .expiresAt(expiresAt)
+                    .isDeleted(false)
+                    .build();
+
+            when(repository.findByIdAndIsDeletedFalse(objectId)).thenReturn(Optional.of(pendingObject));
+            when(repository.claimUploadSession(eq(objectId), any(Instant.class))).thenReturn(1);
+            String signature = generateSignature(objectId, expires);
+
+            byte[] bytes = "short".getBytes(StandardCharsets.UTF_8);
+            assertThatThrownBy(() -> storageService.handleDirectUpload(objectId, new ByteArrayInputStream(bytes),
+                    "text/plain", 50L, expires, signature))
+                    .isInstanceOf(InvalidUploadException.class)
+                    .hasMessageContaining("does not match expected size");
+        }
+
+        @Test
         @DisplayName("Different unauthorized user cannot complete another user's upload")
         void completeUpload_outsiderUser_rejected() {
             UUID objectId = UUID.randomUUID();
@@ -246,7 +338,7 @@ class StorageManagementServiceTest {
                     .filename("doc.pdf")
                     .contentType("application/pdf")
                     .expectedBytes(100L)
-                    .uploadState(UploadState.PENDING)
+                    .uploadState(UploadState.UPLOADING)
                     .expiresAt(Instant.now().plus(10, ChronoUnit.MINUTES))
                     .isDeleted(false)
                     .build();
@@ -357,4 +449,3 @@ class StorageManagementServiceTest {
         }
     }
 }
-

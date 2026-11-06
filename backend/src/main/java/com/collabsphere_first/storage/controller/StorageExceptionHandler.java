@@ -52,8 +52,15 @@ public class StorageExceptionHandler {
 
     @ExceptionHandler(StorageException.class)
     public ResponseEntity<ApiResponse<Void>> handleStorageException(StorageException ex) {
-        log.error("Storage error: {}", ex.getMessage(), ex);
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error("Storage operation failed: " + ex.getMessage()));
+        log.error("Internal storage exception occurred (sanitizing response): {}", ex.getMessage(), ex);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse.error("Internal storage operation failed. Please try again."));
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ApiResponse<Void>> handleUnexpectedException(Exception ex) {
+        log.error("Unexpected error in storage controller", ex);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse.error("An unexpected error occurred while processing storage request."));
     }
 }
-

@@ -78,13 +78,13 @@ public class SecurityConfig {
                 .authenticationProvider(authenticationProvider())
 
                 .addFilterBefore(
-                        new OriginValidationFilter(corsAllowedOrigins),
-                        JwtAuthenticationFilter.class
+                        jwtAuthenticationFilter,
+                        UsernamePasswordAuthenticationFilter.class
                 )
 
                 .addFilterBefore(
-                        jwtAuthenticationFilter,
-                        UsernamePasswordAuthenticationFilter.class
+                        new OriginValidationFilter(corsAllowedOrigins),
+                        JwtAuthenticationFilter.class
                 )
 
                 .authorizeHttpRequests(auth -> auth

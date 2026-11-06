@@ -10,6 +10,7 @@ import com.collabsphere_first.storage.enums.StorageProvider;
 import com.collabsphere_first.storage.enums.UploadState;
 import com.collabsphere_first.storage.exception.InvalidUploadException;
 import com.collabsphere_first.storage.exception.StorageAccessDeniedException;
+import com.collabsphere_first.storage.exception.StorageException;
 import com.collabsphere_first.storage.exception.StorageObjectNotFoundException;
 import com.collabsphere_first.storage.exception.UploadExpiredException;
 import com.collabsphere_first.storage.provider.ObjectStorageProvider;
@@ -75,6 +76,10 @@ public class StorageManagementServiceImpl implements StorageManagementService {
             throw new StorageAccessDeniedException("Authenticated user required to initiate upload");
         }
 
+        if (request.getWorkspaceId() != null) {
+            validateWorkspaceAuthorization(request.getWorkspaceId(), currentUserId);
+        }
+
         String safeFilename = validateAndSanitizeFilename(request.getFilename());
         String contentType = validateAndNormalizeContentType(request.getContentType());
         long contentLength = validateContentLength(request.getContentLength());
@@ -104,7 +109,7 @@ public class StorageManagementServiceImpl implements StorageManagementService {
                 .build();
 
         repository.save(storageObject);
-        log.info("Created storage upload ticket: id={}, ownerId={}, key={}", objectId, currentUserId, storageKey);
+        log.info("Created storage upload ticket: id={}, ownerId={}, key={}, expectedBytes={}", objectId, currentUserId, storageKey, contentLength);
 
         return UploadTicketResponse.builder()
                 .id(objectId)
@@ -120,6 +125,7 @@ public class StorageManagementServiceImpl implements StorageManagementService {
     }
 
     @Override
+    @Transactional
     public void handleDirectUpload(UUID objectId, InputStream body, String contentType, Long contentLength, long expires, String signature) {
         if (objectId == null) {
             throw new InvalidUploadException("Object ID is required");
@@ -134,27 +140,80 @@ public class StorageManagementServiceImpl implements StorageManagementService {
         StorageObject storageObject = repository.findByIdAndIsDeletedFalse(objectId)
                 .orElseThrow(() -> new StorageObjectNotFoundException("Storage object not found: " + objectId));
 
-        if (storageObject.getUploadState() == UploadState.EXPIRED) {
+        // Strict state checks
+        if (storageObject.getUploadState() == UploadState.COMPLETED) {
+            throw new InvalidUploadException("Upload ticket has already been completed and cannot be reused or overwritten");
+        }
+        if (storageObject.getUploadState() == UploadState.UPLOADING) {
+            throw new InvalidUploadException("Upload ticket has already been claimed and an upload is currently in progress");
+        }
+        if (storageObject.getUploadState() == UploadState.EXPIRED || Instant.now().isAfter(storageObject.getExpiresAt())) {
+            storageObject.setUploadState(UploadState.EXPIRED);
+            repository.save(storageObject);
             throw new UploadExpiredException("Upload ticket has expired");
+        }
+        if (storageObject.getUploadState() == UploadState.FAILED) {
+            throw new InvalidUploadException("Upload session previously failed and cannot be reused");
+        }
+        if (storageObject.getUploadState() == UploadState.QUARANTINED) {
+            throw new StorageAccessDeniedException("Upload object is quarantined");
+        }
+        if (storageObject.getUploadState() != UploadState.PENDING) {
+            throw new InvalidUploadException("Upload ticket is in invalid state: " + storageObject.getUploadState());
+        }
+
+        // Concurrency-safe atomic claim
+        int claimed = repository.claimUploadSession(objectId, Instant.now());
+        if (claimed == 0) {
+            throw new InvalidUploadException("Upload session could not be claimed or is already in progress/completed");
+        }
+        storageObject.setUploadState(UploadState.UPLOADING);
+
+        // Exact Content-Length header validation
+        if (contentLength != null && contentLength > 0 && !contentLength.equals(storageObject.getExpectedBytes())) {
+            storageObject.setUploadState(UploadState.FAILED);
+            repository.save(storageObject);
+            throw new InvalidUploadException("Uploaded Content-Length " + contentLength + " does not match expected size " + storageObject.getExpectedBytes());
         }
 
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            CountingInputStream countingStream = new CountingInputStream(new DigestInputStream(body, digest), properties.getMaxFileSizeBytes());
+            CountingInputStream countingStream = new CountingInputStream(new DigestInputStream(body, digest), storageObject.getExpectedBytes());
 
             storageProvider.storeObject(storageObject.getStorageKey(), countingStream,
                     contentType != null ? contentType : storageObject.getContentType(),
-                    contentLength != null ? contentLength : storageObject.getExpectedBytes());
+                    storageObject.getExpectedBytes());
+
+            long actualBytes = countingStream.getBytesRead();
+            if (actualBytes != storageObject.getExpectedBytes()) {
+                storageProvider.deleteObject(storageObject.getStorageKey());
+                storageObject.setUploadState(UploadState.FAILED);
+                repository.save(storageObject);
+                throw new InvalidUploadException("Uploaded file size (" + actualBytes + " bytes) does not match expected size (" + storageObject.getExpectedBytes() + " bytes)");
+            }
 
             byte[] hashBytes = digest.digest();
             String checksum = HexFormat.of().formatHex(hashBytes);
             storageObject.setChecksum(checksum);
-            storageObject.setVerifiedBytes(countingStream.getBytesRead());
+            storageObject.setVerifiedBytes(actualBytes);
             repository.save(storageObject);
 
-            log.info("Stored direct upload bytes for object: {}, bytes: {}, checksum: {}", objectId, countingStream.getBytesRead(), checksum);
+            log.info("Stored direct upload bytes for object: {}, bytes: {}, checksum: {}", objectId, actualBytes, checksum);
+        } catch (InvalidUploadException iue) {
+            storageProvider.deleteObject(storageObject.getStorageKey());
+            storageObject.setUploadState(UploadState.FAILED);
+            repository.save(storageObject);
+            throw iue;
         } catch (NoSuchAlgorithmException e) {
+            storageProvider.deleteObject(storageObject.getStorageKey());
+            storageObject.setUploadState(UploadState.FAILED);
+            repository.save(storageObject);
             throw new IllegalStateException("SHA-256 algorithm not available", e);
+        } catch (Exception ex) {
+            storageProvider.deleteObject(storageObject.getStorageKey());
+            storageObject.setUploadState(UploadState.FAILED);
+            repository.save(storageObject);
+            throw new StorageException("Failed to process direct upload stream", ex);
         }
     }
 
@@ -181,36 +240,48 @@ public class StorageManagementServiceImpl implements StorageManagementService {
             return toResponse(storageObject);
         }
 
+        if (storageObject.getUploadState() == UploadState.PENDING) {
+            throw new InvalidUploadException("No uploaded content found on storage backend for object: " + objectId);
+        }
+
+        if (storageObject.getUploadState() == UploadState.FAILED) {
+            throw new InvalidUploadException("Upload session previously failed and cannot be completed");
+        }
+
         if (storageObject.getUploadState() == UploadState.EXPIRED || Instant.now().isAfter(storageObject.getExpiresAt())) {
             storageObject.setUploadState(UploadState.EXPIRED);
             repository.save(storageObject);
             throw new UploadExpiredException("Upload ticket has expired");
         }
 
-        // Verify file presence on storage provider
+        if (storageObject.getUploadState() != UploadState.UPLOADING) {
+            throw new InvalidUploadException("Upload object is in invalid state for completion: " + storageObject.getUploadState());
+        }
+
+        // Verify physical file on storage provider
         if (!storageProvider.objectExists(storageObject.getStorageKey())) {
+            storageObject.setUploadState(UploadState.FAILED);
+            repository.save(storageObject);
             throw new InvalidUploadException("No uploaded content found on storage backend for object: " + objectId);
         }
 
         long actualBytes = storageProvider.getObjectSize(storageObject.getStorageKey());
-        if (actualBytes <= 0) {
-            throw new InvalidUploadException("Uploaded file is empty");
+        if (actualBytes != storageObject.getExpectedBytes()) {
+            storageProvider.deleteObject(storageObject.getStorageKey());
+            storageObject.setUploadState(UploadState.FAILED);
+            repository.save(storageObject);
+            throw new InvalidUploadException("Stored file size (" + actualBytes + " bytes) does not match expected size (" + storageObject.getExpectedBytes() + " bytes)");
         }
 
-        // If checksum was not computed during stream, compute it now
-        if (storageObject.getChecksum() == null || storageObject.getChecksum().isBlank()) {
-            try (InputStream is = storageProvider.retrieveObject(storageObject.getStorageKey())) {
-                MessageDigest digest = MessageDigest.getInstance("SHA-256");
-                byte[] buf = new byte[8192];
-                int r;
-                while ((r = is.read(buf)) != -1) {
-                    digest.update(buf, 0, r);
-                }
-                storageObject.setChecksum(HexFormat.of().formatHex(digest.digest()));
-            } catch (Exception e) {
-                log.warn("Could not calculate checksum on completion for {}", objectId, e);
-            }
+        // Re-verify SHA-256 checksum from stored object
+        String providerChecksum = computeChecksum(storageObject.getStorageKey());
+        if (storageObject.getChecksum() != null && !storageObject.getChecksum().equalsIgnoreCase(providerChecksum)) {
+            storageProvider.deleteObject(storageObject.getStorageKey());
+            storageObject.setUploadState(UploadState.FAILED);
+            repository.save(storageObject);
+            throw new InvalidUploadException("Stored file checksum verification mismatch at completion");
         }
+        storageObject.setChecksum(providerChecksum);
 
         storageObject.setUploadState(UploadState.COMPLETED);
         storageObject.setVerifiedBytes(actualBytes);
@@ -282,6 +353,14 @@ public class StorageManagementServiceImpl implements StorageManagementService {
 
         storageProvider.deleteObject(storageObject.getStorageKey());
         log.info("Deleted storage object: id={}, ownerId={}", objectId, currentUserId);
+    }
+
+    private void validateWorkspaceAuthorization(UUID workspaceId, Long currentUserId) {
+        if (workspaceId == null) {
+            return;
+        }
+        log.warn("Workspace-scoped upload rejected for workspaceId {}: user {} not authorized", workspaceId, currentUserId);
+        throw new StorageAccessDeniedException("Workspace-scoped uploads require verified workspace membership. Unauthorized workspace: " + workspaceId);
     }
 
     private String validateAndSanitizeFilename(String rawFilename) {
@@ -362,6 +441,20 @@ public class StorageManagementServiceImpl implements StorageManagementService {
         }
     }
 
+    private String computeChecksum(String storageKey) {
+        try (InputStream is = storageProvider.retrieveObject(storageKey)) {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] buf = new byte[8192];
+            int r;
+            while ((r = is.read(buf)) != -1) {
+                digest.update(buf, 0, r);
+            }
+            return HexFormat.of().formatHex(digest.digest());
+        } catch (Exception e) {
+            throw new StorageException("Failed to compute checksum for object: " + storageKey, e);
+        }
+    }
+
     private StorageObjectResponse toResponse(StorageObject obj) {
         return StorageObjectResponse.builder()
                 .id(obj.getId())
@@ -380,12 +473,12 @@ public class StorageManagementServiceImpl implements StorageManagementService {
     }
 
     private static class CountingInputStream extends FilterInputStream {
-        private final long maxBytes;
+        private final long expectedBytes;
         private long bytesRead = 0;
 
-        protected CountingInputStream(InputStream in, long maxBytes) {
+        protected CountingInputStream(InputStream in, long expectedBytes) {
             super(in);
-            this.maxBytes = maxBytes;
+            this.expectedBytes = expectedBytes;
         }
 
         @Override
@@ -409,8 +502,8 @@ public class StorageManagementServiceImpl implements StorageManagementService {
         }
 
         private void checkLimit() {
-            if (bytesRead > maxBytes) {
-                throw new InvalidUploadException("Upload size exceeded maximum allowed limit: " + maxBytes + " bytes");
+            if (bytesRead > expectedBytes) {
+                throw new InvalidUploadException("Streamed bytes exceed expected size of " + expectedBytes + " bytes");
             }
         }
 
@@ -419,4 +512,3 @@ public class StorageManagementServiceImpl implements StorageManagementService {
         }
     }
 }
-
