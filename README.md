@@ -122,18 +122,18 @@ flowchart TD
         FastAPI["FastAPI Recommendation Service\n(Internal HTTP Contract\n/api/v1/internal/recommend/*)"]
     end
 
-    Client -->|HTTP / HTTPS| Nginx
-    Client -->|WSS (WebSockets)| Nginx
-    Nginx -->|Serves Static Files| SPA
-    Nginx -->|Proxies /api/* & /v1/*| SecFilterChain
-    Nginx -->|Proxies /ws/* & /realtime| WSEngine
+    Client -->|"HTTP and HTTPS"| Nginx
+    Client -->|"WSS WebSockets"| Nginx
+    Nginx -->|"Serves Static SPA"| SPA
+    Nginx -->|"Proxies API Requests"| SecFilterChain
+    Nginx -->|"Proxies WebSockets"| WSEngine
 
     SecFilterChain --> Modules
-    Modules -->|JPA / Hibernate| PG
-    Modules -->|Lettuce Client| RD
-    StorMod -->|Streaming I/O| Storage
-    Modules -.->|Service Token HTTP| FastAPI
-    WSEngine -->|Pub/Sub Sync| RD
+    Modules -->|"JPA Hibernate"| PG
+    Modules -->|"Lettuce Client"| RD
+    StorMod -->|"Streaming IO"| Storage
+    Modules -.->|"Service Token HTTP"| FastAPI
+    WSEngine -->|"PubSub Sync"| RD
 ```
 
 ### Request Flow & Lifecycle
@@ -221,8 +221,8 @@ flowchart TD
     Store --> ModeSwitch
     OfflineMode --> DOM
     LiveMode --> NetworkLayer
-    ApiClient -->|HTTP REST| BackendAPI["Spring Boot Backend (:8080)"]
-    RealtimeClient -->|WSS STOMP| WebSocketEndpoint["WebSocket Endpoint (:8080/ws)"]
+    ApiClient -->|"HTTP REST"| BackendAPI["Spring Boot Backend :8080"]
+    RealtimeClient -->|"WSS STOMP"| WebSocketEndpoint["WebSocket Endpoint :8080/ws"]
 ```
 
 ---
@@ -371,11 +371,11 @@ Redis 7 serves as the platform's high-speed, volatile data tier:
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Client as Web Client (realtime.js)
-    participant Nginx as Nginx Proxy (:80)
-    participant WS as WebSocket Handshake Endpoint
-    participant Auth as Channel Inbound Interceptor
-    participant Broker as STOMP Broker (/topic, /queue)
+    actor Client as Web Client
+    participant Nginx as Nginx Proxy
+    participant WS as WebSocket Endpoint
+    participant Auth as Channel Interceptor
+    participant Broker as STOMP Broker
     participant Redis as Redis Presence Store
 
     Client->>Nginx: HTTP Upgrade GET /ws/community
@@ -424,29 +424,29 @@ sequenceDiagram
     participant API as Storage Controller
     participant Svc as Storage Service
     participant DB as PostgreSQL
-    participant Disk as Local Disk / S3
+    participant Disk as Storage Backend
 
     Note over Client,Disk: Step 1: Upload Initiation
-    Client->>API: POST /api/v1/storage/upload/init (filename, mimeType, size)
-    API->>Svc: Validate MIME type & file size quota
-    Svc->>DB: Insert StorageObject (upload_state = PENDING)
+    Client->>API: POST /api/v1/storage/upload/init
+    API->>Svc: Validate MIME type and file size quota
+    Svc->>DB: Insert StorageObject PENDING
     Svc->>Svc: Generate HMAC-SHA256 signature ticket
-    Svc-->>Client: 200 OK + Signed Upload Ticket & URL
+    Svc-->>Client: 200 OK with Signed Ticket
 
     Note over Client,Disk: Step 2: Direct Streaming Upload
-    Client->>API: PUT /api/v1/storage/upload/direct/{id} (HMAC Ticket Header + Raw Bytes)
-    API->>Svc: Verify ticket signature & expiration timestamp
-    Svc->>DB: Atomic Update: state PENDING -> UPLOADING (Lock acquired)
+    Client->>API: PUT /api/v1/storage/upload/direct/{id}
+    API->>Svc: Verify ticket signature and expiry
+    Svc->>DB: Atomic Update PENDING to UPLOADING
     alt Already Uploaded or Replayed
-        Svc-->>Client: 409 Conflict / 403 Forbidden (Replay Rejected)
+        Svc-->>Client: 409 Conflict (Replay Rejected)
     else State transition successful
-        Svc->>Disk: Stream binary bytes directly to disk/bucket
+        Svc->>Disk: Stream binary bytes directly to disk or bucket
         alt Upload Succeeded
-            Svc->>DB: Verify byte count & update state -> COMPLETED
-            Svc-->>Client: 200 OK (Object Ready)
-        else Upload Failed / Aborted
-            Svc->>DB: Update state -> FAILED (Session Invalidated)
-            Svc-->>Client: 500 Error (Cannot be replayed)
+            Svc->>DB: Verify byte count and update state to COMPLETED
+            Svc-->>Client: 200 OK Object Ready
+        else Upload Failed or Aborted
+            Svc->>DB: Update state to FAILED
+            Svc-->>Client: 500 Error Session Invalidated
         end
     end
 ```
@@ -483,28 +483,28 @@ sequenceDiagram
     participant API as Protected API Endpoint
 
     Note over User,Redis: 1. User Login Handshake
-    User->>Auth: POST /api/v1/auth/login (email, password)
+    User->>Auth: POST /api/v1/auth/login with credentials
     Auth->>DB: Verify BCrypt password hash
     Auth->>DB: Insert hashed Refresh Token
-    Auth->>Redis: Ensure session version initialized (e.g., v=1)
-    Auth-->>User: Return Access Token (JWT with v=1) + Set-Cookie (HttpOnly Refresh Token)
+    Auth->>Redis: Ensure session version initialized
+    Auth-->>User: Return Access Token JWT plus HttpOnly Cookie
 
     Note over User,API: 2. Authenticated Request Execution
-    User->>API: GET /v1/projects (Bearer Access Token v=1)
-    API->>API: Validate JWT signature & expiration
-    API->>Redis: Fetch current user:session_version
-    alt Session Version Matches (v=1)
-        API-->>User: 200 OK (Data Response)
-    else Session Version Mismatch (v != 1)
-        API-->>User: 401 Unauthorized (Token Revoked)
+    User->>API: GET /v1/projects with Bearer Token
+    API->>API: Validate JWT signature and expiration
+    API->>Redis: Fetch current user session version
+    alt Session Version Valid
+        API-->>User: 200 OK Data Response
+    else Session Version Mismatch
+        API-->>User: 401 Unauthorized Token Revoked
     end
 
-    Note over User,Redis: 3. Global Logout / Password Reset
+    Note over User,Redis: 3. Global Logout or Password Reset
     User->>Auth: POST /api/v1/auth/logout
-    Auth->>DB: Delete/Revoke Refresh Token
-    Auth->>Redis: Increment user:session_version (v=1 -> v=2)
-    Auth-->>User: 200 OK (Cleared Cookie)
-    Note over User,API: All previous access tokens (v=1) are now instantly invalid everywhere!
+    Auth->>DB: Delete or Revoke Refresh Token
+    Auth->>Redis: Increment user session version
+    Auth-->>User: 200 OK Cleared Cookie
+    Note over User,API: All previous access tokens are now instantly invalidated
 ```
 
 ---
@@ -718,12 +718,12 @@ flowchart TD
     HostPort5432 -.-> PostgresContainer
     HostPort6379 -.-> RedisContainer
 
-    NginxContainer -->|proxy_pass :8080/api/| BackendContainer
-    NginxContainer -->|proxy_pass :8080/v1/| BackendContainer
-    NginxContainer -->|proxy_pass :8080/ws/| BackendContainer
+    NginxContainer -->|"Proxy API Requests"| BackendContainer
+    NginxContainer -->|"Proxy V1 Requests"| BackendContainer
+    NginxContainer -->|"Proxy WebSocket Upgrades"| BackendContainer
 
-    BackendContainer -->|JDBC connection| PostgresContainer
-    BackendContainer -->|Lettuce connection| RedisContainer
+    BackendContainer -->|"JDBC Connection"| PostgresContainer
+    BackendContainer -->|"Lettuce Connection"| RedisContainer
 
     PostgresContainer --- VolPG
     RedisContainer --- VolRD
