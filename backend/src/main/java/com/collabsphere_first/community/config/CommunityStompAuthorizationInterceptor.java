@@ -39,28 +39,25 @@ public class CommunityStompAuthorizationInterceptor implements ChannelIntercepto
     private final JwtService jwtService;
     private final CustomUserDetailsService userDetailsService;
     private final CommunityAccessService accessService;
+    private final WebSocketAuthenticatedSessionRegistry sessionRegistry;
 
-    @Autowired(required = false)
-    private WebSocketAuthenticatedSessionRegistry sessionRegistry;
-
+    @Autowired
     public CommunityStompAuthorizationInterceptor(
             JwtService jwtService,
             CustomUserDetailsService userDetailsService,
-            CommunityAccessService accessService) {
+            CommunityAccessService accessService,
+            @Autowired(required = false) WebSocketAuthenticatedSessionRegistry sessionRegistry) {
         this.jwtService = jwtService;
         this.userDetailsService = userDetailsService;
         this.accessService = accessService;
+        this.sessionRegistry = sessionRegistry;
     }
 
     public CommunityStompAuthorizationInterceptor(
             JwtService jwtService,
             CustomUserDetailsService userDetailsService,
-            CommunityAccessService accessService,
-            WebSocketAuthenticatedSessionRegistry sessionRegistry) {
-        this.jwtService = jwtService;
-        this.userDetailsService = userDetailsService;
-        this.accessService = accessService;
-        this.sessionRegistry = sessionRegistry;
+            CommunityAccessService accessService) {
+        this(jwtService, userDetailsService, accessService, null);
     }
 
     @Override
