@@ -97,6 +97,8 @@ public class SecurityConfig {
                                 "/v1/explore/**",
                                 "/api/v1/storage/raw/**",
                                 "/v1/storage/raw/**",
+                                "/api/v1/payments/webhook",
+                                "/v1/payments/webhook",
                                 "/h2-console/**",
                                 "/actuator/**",
                                 "/oauth2/**",

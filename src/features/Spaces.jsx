@@ -6422,12 +6422,17 @@ export function Services() {
         milestones: bookingService.milestones || ['Phase 1 Setup', 'Phase 2 Deliverables', 'Final Approval'],
       };
 
-      await a.bookService(bookingService, draft);
+      const bookingResult = await a.bookService(bookingService, draft);
+      const enhancedBooking = {
+        ...draft,
+        id: bookingResult?.booking?.id || draft.id,
+        remote: Boolean(bookingResult?.booking?.remote),
+      };
 
       // Enhance in state so the order tracker has full fields immediately
       a.setBookings((prev) => [
-        draft,
-        ...prev.filter((item) => item.id !== draft.id),
+        enhancedBooking,
+        ...prev.filter((item) => item.id !== enhancedBooking.id),
       ]);
 
       a.notify(
@@ -6447,7 +6452,16 @@ export function Services() {
   };
 
   // Advance Order Lifecycle (Demo Simulation to show full end-to-end progression)
-  const handleAdvanceOrderStatus = (orderId, newStatus) => {
+  const handleAdvanceOrderStatus = async (orderId, newStatus) => {
+    try {
+      if (newStatus === 'Cancelled' && a.cancelServiceBooking) {
+        await a.cancelServiceBooking(orderId);
+      } else if (newStatus === 'Confirmed' && a.confirmServiceBooking) {
+        await a.confirmServiceBooking(orderId);
+      }
+    } catch (err) {
+      console.warn('Could not sync booking status with backend:', err);
+    }
     a.setBookings((prev) => {
       const existing = prev.find((b) => b.orderId === orderId || b.id === orderId);
       if (existing) {
@@ -6494,8 +6508,15 @@ export function Services() {
   };
 
   // Client approves deliverables and releases escrow
-  const handleApproveAndReleaseEscrow = (order) => {
-    handleAdvanceOrderStatus(order.orderId || order.id, 'Completed');
+  const handleApproveAndReleaseEscrow = async (order) => {
+    try {
+      if (order?.remote && a.confirmPaymentOrder && order.paymentOrderId) {
+        await a.confirmPaymentOrder(order.paymentOrderId);
+      }
+    } catch (err) {
+      console.warn('Could not confirm payment order remotely:', err);
+    }
+    await handleAdvanceOrderStatus(order.orderId || order.id, 'Completed');
     setReviewDeliverablesOrder(null);
     a.notify(
       'Escrow Funds Released',
@@ -6507,49 +6528,73 @@ export function Services() {
   };
 
   // Submit client rating & review
-  const handleSubmitReview = () => {
+  const handleSubmitReview = async () => {
     if (!ratingModalOrder) return;
-    a.toast(`Thank you! Rating of ${ratingStars}★ submitted for ${ratingModalOrder.provider}.`);
-    setRatingModalOrder(null);
-    setRatingReviewText('');
+    try {
+      if (a.createServiceReview && (ratingModalOrder.serviceId || ratingModalOrder.remote)) {
+        await a.createServiceReview(ratingModalOrder.serviceId || ratingModalOrder.id, {
+          rating: ratingStars,
+          reviewText: ratingReviewText || 'Great service delivery and timely milestone execution!',
+          bookingId: ratingModalOrder.id,
+        });
+      }
+      a.toast(`Thank you! Rating of ${ratingStars}★ submitted for ${ratingModalOrder.provider}.`);
+    } catch (err) {
+      a.toast(err.message || 'Failed to submit review');
+    } finally {
+      setRatingModalOrder(null);
+      setRatingReviewText('');
+    }
   };
 
   // Provider: List New Service
-  const handleCreateNewService = () => {
+  const handleCreateNewService = async () => {
     if (!newServiceDraft.title.trim()) {
       a.toast('Please provide a service title');
       return;
     }
-    const created = {
-      id: `custom-srv-${Date.now()}`,
-      title: newServiceDraft.title.trim(),
-      category: newServiceDraft.category,
-      categoryName: serviceCategories.find((c) => c.id === newServiceDraft.category)?.name || 'Specialist Service',
-      provider: a.profile?.name || 'You (Verified Pro)',
-      providerRole: 'Collobster Verified Specialist',
-      providerAvatar: a.profile?.image || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-      price: Number(newServiceDraft.price) || 4999,
-      pricingType: newServiceDraft.pricingType,
-      duration: newServiceDraft.duration,
-      deliveryMode: newServiceDraft.deliveryMode,
-      description: newServiceDraft.description || 'Specialist professional service provided via Collobster.',
-      highlights: newServiceDraft.highlights.split(',').map((s) => s.trim()).filter(Boolean),
-    };
-    a.setServiceListings((prev) => [created, ...(prev || [])]);
-    a.notify('New Service Published', `Your service "${created.title}" is now live in the Collobster Marketplace.`, 'Services');
-    a.toast(`🎉 Service "${created.title}" published successfully!`);
-    setShowListServiceModal(false);
-    setNewServiceDraft({
-      title: '',
-      category: 'software',
-      deliveryMode: 'Remote (Global)',
-      pricingType: 'Milestone-based Package',
-      price: 9999,
-      duration: '5 days',
-      highlights: 'Production quality deliverables, Full code repository, 14-day warranty',
-      description: '',
-    });
-    setActiveTab('catalog');
+    try {
+      const draftPayload = {
+        title: newServiceDraft.title.trim(),
+        category: newServiceDraft.category,
+        deliveryMode: newServiceDraft.deliveryMode,
+        pricingType: newServiceDraft.pricingType,
+        price: Number(newServiceDraft.price) || 4999,
+        duration: newServiceDraft.duration,
+        description: newServiceDraft.description || 'Specialist professional service provided via Collobster.',
+        highlights: newServiceDraft.highlights,
+      };
+      if (a.createServiceListing) {
+        await a.createServiceListing(draftPayload);
+      } else {
+        const created = {
+          id: `custom-srv-${Date.now()}`,
+          ...draftPayload,
+          categoryName: serviceCategories.find((c) => c.id === newServiceDraft.category)?.name || 'Specialist Service',
+          provider: a.profile?.name || 'You (Verified Pro)',
+          providerRole: 'Collobster Verified Specialist',
+          providerAvatar: a.profile?.image || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+          highlights: newServiceDraft.highlights.split(',').map((s) => s.trim()).filter(Boolean),
+        };
+        a.setServiceListings((prev) => [created, ...(prev || [])]);
+      }
+      a.notify('New Service Published', `Your service "${newServiceDraft.title.trim()}" is now live in the Collobster Marketplace.`, 'Services');
+      a.toast(`🎉 Service "${newServiceDraft.title.trim()}" published successfully!`);
+      setShowListServiceModal(false);
+      setNewServiceDraft({
+        title: '',
+        category: 'software',
+        deliveryMode: 'Remote (Global)',
+        pricingType: 'Milestone-based Package',
+        price: 9999,
+        duration: '5 days',
+        highlights: 'Production quality deliverables, Full code repository, 14-day warranty',
+        description: '',
+      });
+      setActiveTab('catalog');
+    } catch (err) {
+      a.toast(err.message || 'Failed to publish service');
+    }
   };
 
   // Client: Post Custom RFP

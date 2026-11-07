@@ -95,14 +95,14 @@ Projects,projects.createTask,POST,/v1/projects/{id}/tasks,/v1/projects/{id}/task
 Projects,projects.updateTaskStatus,PATCH,/v1/projects/{id}/tasks/{taskId}/status,/v1/projects/{id}/tasks/{taskId}/status,IMPLEMENTED_AND_TESTED,TEST-PROJ-010,Task status update (todo/in_progress/review/done)
 Projects,projects.milestones,GET,/v1/projects/{id}/milestones,/v1/projects/{id}/milestones,IMPLEMENTED_AND_TESTED,TEST-PROJ-011,Project milestone listing
 Projects,projects.createMilestone,POST,/v1/projects/{id}/milestones,/v1/projects/{id}/milestones,IMPLEMENTED_AND_TESTED,TEST-PROJ-012,Project milestone creation with target date
-Services,services.list,GET,/v1/services,-,DEFERRED,SCHED-P5-023,Domain scheduled for Phase 5 implementation
-Services,services.bookings,GET,/v1/services/bookings,-,DEFERRED,SCHED-P5-024,Domain scheduled for Phase 5 implementation
-Services,services.createListing,POST,/v1/services,-,DEFERRED,SCHED-P5-025,Domain scheduled for Phase 5 implementation
-Services,services.book,POST,/v1/services/{id}/bookings,-,DEFERRED,SCHED-P5-026,Domain scheduled for Phase 5 implementation
-Services,services.confirm,POST,/v1/services/bookings/{id}/confirm,-,DEFERRED,SCHED-P5-027,Domain scheduled for Phase 5 implementation
-Services,services.cancel,POST,/v1/services/bookings/{id}/cancel,-,DEFERRED,SCHED-P5-028,Domain scheduled for Phase 5 implementation
-Services,services.reviews,GET,/v1/services/{id}/reviews,-,DEFERRED,SCHED-P5-029,Domain scheduled for Phase 5 implementation
-Services,services.createReview,POST,/v1/services/{id}/reviews,-,DEFERRED,SCHED-P5-030,Domain scheduled for Phase 5 implementation
+Services,services.list,GET,/v1/services,/v1/services,IMPLEMENTED_AND_TESTED,TEST-SRV-001,Active service catalog listing with search and category filters
+Services,services.bookings,GET,/v1/services/bookings,/v1/services/bookings,IMPLEMENTED_AND_TESTED,TEST-SRV-002,User service bookings listing for customer and provider
+Services,services.createListing,POST,/v1/services,/v1/services,IMPLEMENTED_AND_TESTED,TEST-SRV-003,Provider service listing creation with pricing and packages
+Services,services.book,POST,/v1/services/{id}/bookings,/v1/services/{id}/bookings,IMPLEMENTED_AND_TESTED,TEST-SRV-004,Customer booking creation with slot conflict prevention
+Services,services.confirm,POST,/v1/services/bookings/{id}/confirm,/v1/services/bookings/{id}/confirm,IMPLEMENTED_AND_TESTED,TEST-SRV-005,Provider atomic booking confirmation
+Services,services.cancel,POST,/v1/services/bookings/{id}/cancel,/v1/services/bookings/{id}/cancel,IMPLEMENTED_AND_TESTED,TEST-SRV-006,Customer or provider booking cancellation
+Services,services.reviews,GET,/v1/services/{id}/reviews,/v1/services/{id}/reviews,IMPLEMENTED_AND_TESTED,TEST-SRV-007,Service public reviews listing
+Services,services.createReview,POST,/v1/services/{id}/reviews,/v1/services/{id}/reviews,IMPLEMENTED_AND_TESTED,TEST-SRV-008,Verified customer rating and review submission
 Companies,companies.list,GET,/v1/companies,/v1/companies,IMPLEMENTED_AND_TESTED,TEST-COMP-001,User company workspaces with role and state
 Companies,companies.create,POST,/v1/companies,/v1/companies,IMPLEMENTED_AND_TESTED,TEST-COMP-002,Company workspace creation with owner enrollment
 Companies,companies.invite,POST,/v1/companies/{id}/members,/v1/companies/{id}/members,IMPLEMENTED_AND_TESTED,TEST-COMP-003,Company team invitation with admin check
@@ -133,10 +133,10 @@ Career,career.reviewApplication,PATCH,/v1/career/jobs/{id}/applications/{appId}/
 Storage,storage.requestUpload,POST,/v1/storage/uploads,StorageController.java,IMPLEMENTED_AND_TESTED,-,Verified upload session initiation with signed URLs and metadata persistence
 Storage,storage.completeUpload,POST,/v1/storage/uploads/{id}/complete,StorageController.java,IMPLEMENTED_AND_TESTED,-,Verified upload completion with backend file verification and idempotency
 Storage,storage.putFile,PUT,externalUploadUrl,StorageController.java,IMPLEMENTED_AND_TESTED,-,Direct upload to signed ticket URL verified with HMAC validation
-Payments,payments.createOrder,POST,/v1/payments/orders,-,DEFERRED,SCHED-P5-061,Domain scheduled for Phase 5 implementation
-Payments,payments.confirmOrder,POST,/v1/payments/orders/{id}/confirm,-,DEFERRED,SCHED-P5-062,Domain scheduled for Phase 5 implementation
-Payments,payments.webhook,POST,/v1/payments/webhook,-,DEFERRED,SCHED-P5-063,Domain scheduled for Phase 5 implementation
-Payments,payments.orders,GET,/v1/payments/orders,-,DEFERRED,SCHED-P5-064,Domain scheduled for Phase 5 implementation
-Payments,payments.reconciliation,GET,/v1/payments/orders/{id}/reconciliation,-,DEFERRED,SCHED-P5-065,Domain scheduled for Phase 5 implementation
-Payments,payments.requestPayout,POST,/v1/payments/payouts,-,DEFERRED,SCHED-P5-066,Domain scheduled for Phase 5 implementation
-Payments,payments.payouts,GET,/v1/payments/payouts,-,DEFERRED,SCHED-P5-067,Domain scheduled for Phase 5 implementation
+Payments,payments.createOrder,POST,/v1/payments/orders,/v1/payments/orders,IMPLEMENTED_AND_TESTED,TEST-PAY-001,Payment order checkout creation with idempotency and booking price check
+Payments,payments.confirmOrder,POST,/v1/payments/orders/{id}/confirm,/v1/payments/orders/{id}/confirm,IMPLEMENTED_AND_TESTED,TEST-PAY-002,Payment order confirmation with gateway verification and ledger credit
+Payments,payments.webhook,POST,/v1/payments/webhook,/v1/payments/webhook,IMPLEMENTED_AND_TESTED,TEST-PAY-003,HMAC-SHA256 verified webhook processing with replay deduplication
+Payments,payments.orders,GET,/v1/payments/orders,/v1/payments/orders,IMPLEMENTED_AND_TESTED,TEST-PAY-004,User payment orders history
+Payments,payments.reconciliation,GET,/v1/payments/orders/{id}/reconciliation,/v1/payments/orders/{id}/reconciliation,IMPLEMENTED_AND_TESTED,TEST-PAY-005,Payment order reconciliation against gateway status
+Payments,payments.requestPayout,POST,/v1/payments/payouts,/v1/payments/payouts,IMPLEMENTED_AND_TESTED,TEST-PAY-006,Provider payout request with ledger balance verification and debit
+Payments,payments.payouts,GET,/v1/payments/payouts,/v1/payments/payouts,IMPLEMENTED_AND_TESTED,TEST-PAY-007,Provider payouts history
