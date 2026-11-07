@@ -264,7 +264,7 @@ class ProjectsAndCompaniesPostgreSqlIntegrationTest {
                 .storageObjectId(storageId)
                 .title("Annual Audit Report")
                 .collection("Compliance")
-                .accessScope("admins")
+                .accessScope("admin_only")
                 .createdBy(owner.getId())
                 .isArchived(false)
                 .build());
