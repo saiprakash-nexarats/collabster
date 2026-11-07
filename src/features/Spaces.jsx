@@ -4181,7 +4181,7 @@ public class CollaboratorService {
         </div>
         <div className="code-workspace-nav">
           <Tabs
-            items={['Code Space', 'Tasks', 'Roadmap', 'Terminal']}
+            items={['Code Space', 'Tasks', 'Roadmap', 'Team', 'Terminal']}
             value={topTab}
             onChange={setTopTab}
           />
@@ -4349,6 +4349,7 @@ public class CollaboratorService {
 
       {topTab === 'Tasks' && <ProjectTaskBoard project={project} app={a} />}
       {topTab === 'Roadmap' && <ProjectRoadmap project={project} app={a} />}
+      {topTab === 'Team' && <ProjectTeamPanel project={project} app={a} />}
       {topTab === 'Terminal' && (
         <div className="project-terminal-view">
           <h3>Connected Build Environment</h3>
@@ -4547,6 +4548,168 @@ function ProjectTaskBoard({ project, app }) {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+
+function ProjectTeamPanel({ project, app }) {
+  const [query, setQuery] = useState('');
+  const [role, setRole] = useState('collaborator');
+  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [searched, setSearched] = useState(false);
+  const [error, setError] = useState('');
+
+  const invitations = (app.projectInvitations && app.projectInvitations[project?.id]) || [];
+
+  const find = async (event) => {
+    event.preventDefault();
+    if (query.trim().length < 2) {
+      setError('Enter at least two characters.');
+      return;
+    }
+    setLoading(true);
+    setSearched(true);
+    setError('');
+    try {
+      setResults(await app.searchProfiles(query));
+    } catch (reason) {
+      setError(reason.message || 'Could not search profiles.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const invite = async (person) => {
+    setLoading(true);
+    setError('');
+    try {
+      const mode = await app.inviteProjectMember(project, person, role);
+      setResults((current) => current.filter((item) => item.id !== person.id));
+      app.toast(
+        mode === 'synced'
+          ? 'Project invitation sent.'
+          : 'Project invitation saved in Preview.'
+      );
+    } catch (reason) {
+      setError(reason.message || 'Could not send this invitation.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAccept = async () => {
+    setLoading(true);
+    try {
+      await app.acceptProjectInvitation(project.id);
+    } catch (reason) {
+      setError(reason.message || 'Could not accept invitation.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="team-workspace" style={{ padding: '24px' }}>
+      {project?.membershipState === 'invited' && (
+        <div className="banner" style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--surface-sunken)', padding: '12px 16px', borderRadius: '8px' }}>
+          <span>You have been invited to collaborate on this project.</span>
+          <Button variant="primary" onClick={handleAccept} disabled={loading}>
+            Accept Invitation
+          </Button>
+        </div>
+      )}
+      <section className="person-list" aria-label="Project team">
+        <article>
+          <Avatar person={app.profile} name={app.profile?.name} />
+          <div>
+            <b>{app.profile?.name}</b>
+            <small>{project?.roles || 'Project member'}</small>
+          </div>
+          <Tag tone="purple">{project?.roles || 'Member'}</Tag>
+        </article>
+        {invitations.map((person) => (
+          <article key={person.id}>
+            <Avatar name={person.name} />
+            <div>
+              <b>{person.name}</b>
+              <small>
+                {person.headline || 'Invited contributor'} · {person.role}
+              </small>
+            </div>
+            <Tag tone="gold">Pending</Tag>
+          </article>
+        ))}
+      </section>
+
+      <form className="content-editor member-search-panel" onSubmit={find} style={{ marginTop: '20px' }}>
+        <div>
+          <span className="eyebrow">PROJECT COLLABORATORS</span>
+          <h4>Invite someone to build with you</h4>
+          <p>Search by name or role to add contributors to this code space.</p>
+        </div>
+
+        <div className="field">
+          <label htmlFor="project-member-query">Find a contributor</label>
+          <div className="search-bar">
+            <Search size={16} />
+            <input
+              id="project-member-query"
+              type="search"
+              placeholder="Search by name, handle, or expertise..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="field">
+          <label htmlFor="project-member-role">Assign project role</label>
+          <select
+            id="project-member-role"
+            value={role}
+            onChange={(e) => setRole(e.target.value)}
+          >
+            <option value="viewer">Viewer (read-only access)</option>
+            <option value="collaborator">Collaborator (files and tasks)</option>
+            <option value="maintainer">Maintainer (full project management)</option>
+          </select>
+        </div>
+
+        {error && <div className="field-error">{error}</div>}
+
+        <div className="form-actions">
+          <Button type="submit" variant="secondary" disabled={loading}>
+            {loading ? 'Searching...' : 'Search contributors'}
+          </Button>
+        </div>
+      </form>
+
+      {searched && (
+        <section className="person-list search-results" aria-label="Search results" style={{ marginTop: '16px' }}>
+          {results.length === 0 ? (
+            <div className="empty-state">No builders found matching "{query}".</div>
+          ) : (
+            results.map((person) => (
+              <article key={person.id}>
+                <Avatar name={person.displayName} />
+                <div>
+                  <b>{person.displayName}</b>
+                  <small>{person.headline || person.location || 'Contributor'}</small>
+                </div>
+                <Button
+                  variant="primary"
+                  onClick={() => invite(person)}
+                  disabled={loading}
+                >
+                  Invite as {role}
+                </Button>
+              </article>
+            ))
+          )}
+        </section>
+      )}
     </div>
   );
 }
@@ -4942,6 +5105,23 @@ function CompanyTeamPanel({ app, company }) {
 
   return (
     <div className="team-workspace">
+      {company?.membershipState === 'invited' && (
+        <div className="banner" style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--surface-sunken)', padding: '12px 16px', borderRadius: '8px' }}>
+          <span>You have been invited to join this company.</span>
+          <Button variant="primary" onClick={async () => {
+            setLoading(true);
+            try {
+              await app.acceptCompanyInvitation(company.id);
+            } catch(e) {
+              setError(e.message || 'Could not accept invitation');
+            } finally {
+              setLoading(false);
+            }
+          }} disabled={loading}>
+            Accept Invitation
+          </Button>
+        </div>
+      )}
       <section className="person-list" aria-label="Company team">
         <article>
           <Avatar person={app.profile} name={app.profile.name} />

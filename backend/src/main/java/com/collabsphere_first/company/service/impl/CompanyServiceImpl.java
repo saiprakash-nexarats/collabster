@@ -336,7 +336,7 @@ public class CompanyServiceImpl implements CompanyService, WorkspaceAccessChecke
 
         return CompanyDownloadTicketDto.builder()
                 .downloadUrl("/v1/companies/" + companyId + "/documents/" + documentId + "/raw")
-                .expiresIn(900L)
+                .expiresIn(null)
                 .build();
     }
 

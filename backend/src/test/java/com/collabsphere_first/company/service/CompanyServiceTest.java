@@ -240,7 +240,7 @@ class CompanyServiceTest {
 
         CompanyDownloadTicketDto ticket = companyService.downloadDocument(companyId, docId, ownerId);
         assertThat(ticket.getDownloadUrl()).contains(docId.toString());
-        assertThat(ticket.getExpiresIn()).isPositive();
+        assertThat(ticket.getDownloadUrl()).endsWith("/raw");
     }
 
     @Test

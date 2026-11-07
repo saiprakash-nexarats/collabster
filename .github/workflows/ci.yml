@@ -38,6 +38,20 @@ jobs:
   backend:
     name: Backend (Compile & Unit Tests)
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: collabsphere
+          POSTGRES_USER: collabsphere
+          POSTGRES_PASSWORD: collabsphere_secret
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -51,4 +65,8 @@ jobs:
 
       - name: Compile and run core unit tests
         working-directory: backend
+        env:
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/collabsphere
+          SPRING_DATASOURCE_USERNAME: collabsphere
+          SPRING_DATASOURCE_PASSWORD: collabsphere_secret
         run: mvn -B test -Dtest=AuthenticationSecurityHardeningTest,AuthenticationDatabaseIntegrationTest,WebSocketSecurityTest,MessagingWebSocketSecurityTest,MultiDeviceLogoutTest,AccountWideSessionRevocationTest,AccountLifecycleIntegrationTest,SystemHealthControllerTest,MessagingMembershipAuthorizationTest,CommunityEventParityTest,StorageManagementServiceTest,StorageControllerTest,StorageSecurityAndHardeningTest,StorageDatabaseIntegrationTest,StorageSecurityChainIntegrationTest,ProjectServiceTest,CompanyServiceTest,ProjectControllerTest,CompanyControllerTest,ProjectsAndCompaniesDatabaseIntegrationTest,ProjectSecurityAuthorizationTest,CompanyDocumentSecurityTest
