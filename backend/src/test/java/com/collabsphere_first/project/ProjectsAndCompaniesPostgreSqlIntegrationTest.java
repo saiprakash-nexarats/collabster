@@ -204,17 +204,6 @@ class ProjectsAndCompaniesPostgreSqlIntegrationTest {
                 .build());
         assertThat(file1.getId()).isNotNull();
 
-        // Duplicate path constraint uq_project_files_path
-        ProjectFile duplicateFile = ProjectFile.builder()
-                .projectId(project.getId())
-                .path("src/index.js")
-                .content("console.log('duplicate');")
-                .fileType("javascript")
-                .createdBy(owner.getId())
-                .build();
-        assertThatThrownBy(() -> projectFileRepository.saveAndFlush(duplicateFile))
-                .isInstanceOf(DataIntegrityViolationException.class);
-
         // Project Task
         ProjectTask task = projectTaskRepository.save(ProjectTask.builder()
                 .projectId(project.getId())
@@ -229,6 +218,17 @@ class ProjectsAndCompaniesPostgreSqlIntegrationTest {
         projectTaskRepository.saveAndFlush(task);
         assertThat(projectTaskRepository.findByProjectIdAndId(project.getId(), task.getId()).orElseThrow().getStatus())
                 .isEqualTo("in_progress");
+
+        // Duplicate path constraint uq_project_files_path
+        ProjectFile duplicateFile = ProjectFile.builder()
+                .projectId(project.getId())
+                .path("src/index.js")
+                .content("console.log('duplicate');")
+                .fileType("javascript")
+                .createdBy(owner.getId())
+                .build();
+        assertThatThrownBy(() -> projectFileRepository.saveAndFlush(duplicateFile))
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
@@ -255,6 +255,7 @@ class ProjectsAndCompaniesPostgreSqlIntegrationTest {
                 .uploadState(UploadState.COMPLETED)
                 .expectedBytes(2048L)
                 .verifiedBytes(2048L)
+                .expiresAt(Instant.now().plusSeconds(86400 * 30))
                 .build());
         assertThat(storageObject.getId()).isEqualTo(storageId);
 

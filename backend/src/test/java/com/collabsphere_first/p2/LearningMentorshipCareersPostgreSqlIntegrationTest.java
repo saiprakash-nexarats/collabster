@@ -139,14 +139,6 @@ public class LearningMentorshipCareersPostgreSqlIntegrationTest {
                                 .build());
                 assertThat(enrollment.getId()).isNotNull();
 
-                // Duplicate enrollment rejected by unique constraint
-                assertThatThrownBy(() -> enrollmentRepository.saveAndFlush(CourseEnrollment.builder()
-                                .courseId(course.getId())
-                                .userId(student.getId())
-                                .enrollmentState("active")
-                                .build()))
-                                .isInstanceOf(DataIntegrityViolationException.class);
-
                 // Lesson completions
                 completionRepository.save(LessonCompletion.builder()
                                 .lessonId(lesson1.getId())
@@ -169,6 +161,14 @@ public class LearningMentorshipCareersPostgreSqlIntegrationTest {
 
                 assertThat(certificate.getId()).isNotNull();
                 assertThat(certificateRepository.findByCertificateNumber("COLLOB-2026-TEST9999")).isPresent();
+
+                // Duplicate enrollment rejected by unique constraint uq_course_user
+                assertThatThrownBy(() -> enrollmentRepository.saveAndFlush(CourseEnrollment.builder()
+                                .courseId(course.getId())
+                                .userId(student.getId())
+                                .enrollmentState("active")
+                                .build()))
+                                .isInstanceOf(DataIntegrityViolationException.class);
         }
 
         @Test
