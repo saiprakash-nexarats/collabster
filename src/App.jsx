@@ -120,23 +120,199 @@ export default function App(){
  function completeAuth(details){if(api.configured&&!details.accessToken){setToast('Sign-in failed: an active verified session is required.');return;}const name=`${details.firstName||'Ananya'} ${details.lastName||'Sharma'}`.trim();setProfile(old=>({...old,profileId:details.profileId||old.profileId,name,location:details.location||old.location,headline:details.role||old.headline,skills:details.skills?details.skills.split(',').map(x=>x.trim()).filter(Boolean):old.skills,interests:details.interests?details.interests.split(',').map(x=>x.trim()).filter(Boolean):old.interests,username:details.username||old.username,dob:details.dob||old.dob,gender:details.gender||old.gender,onboarded:true}));setAuth({email:details.email||'',provider:details.provider||'email',accessToken:details.accessToken||null,refreshToken:details.refreshToken||null,signedInAt:Date.now()});location.hash='Home';setPage('Home')}
  async function saveProfile(next){if(serviceState==='connected'&&auth?.accessToken){const remote=await api.identity.update(profilePayload(next),auth.accessToken);setProfile(old=>({...next,...mergeRemoteProfile(next,remote)}));return 'synced'}setProfile(next);return 'preview'}
  async function updateProfilePrivacy(checked){const next={...profile,privacy:{...profile.privacy,profileVisibility:checked?'private':'public'}};try{const mode=await saveProfile(next);setToast(mode==='synced'?`Profile is now ${checked?'private':'public'} across your account.`:`Profile is now ${checked?'private':'public'} in Preview.`)}catch{setToast('Could not save profile visibility. Please try again.')}}
- async function createCompany(draft){const payload={name:draft.name.trim(),description:(draft.description||draft.tagline||'A new company workspace.').trim(),industry:draft.industry.trim(),stage:draft.stage.trim()};let remote=null;if(serviceState==='connected'&&auth?.accessToken)remote=await api.companies.create(payload,auth.accessToken);const company={...payload,id:remote?.id||`company-${crypto.randomUUID()}`,state:remote?.state||'verification_pending',tagline:draft.tagline,website:draft.website,headquarters:draft.headquarters,country:draft.country,teamSize:draft.teamSize,model:draft.model,path:draft.path||'Startup / dev environment',createdAt:new Date().toISOString(),remote:Boolean(remote)};setCompanyDrafts(old=>[company,...old.filter(item=>item.id!==company.id)]);return {...company,mode:remote?'synced':'preview'};}
+ async function createCompany(draft){
+  const payload={name:draft.name.trim(),description:(draft.description||draft.tagline||'A new company workspace.').trim(),industry:draft.industry.trim(),stage:draft.stage.trim()};
+  if(auth?.accessToken){
+    if(serviceState!=='connected') throw new Error('An active connection to Collobster is required to create a company.');
+    const remote=await api.companies.create(payload,auth.accessToken);
+    const company={...payload,id:remote.id,state:remote.state||'verification_pending',tagline:draft.tagline,website:draft.website,headquarters:draft.headquarters,country:draft.country,teamSize:draft.teamSize,model:draft.model,path:draft.path||'Startup / dev environment',createdAt:remote.createdAt||new Date().toISOString(),role:'owner',membershipState:'active',remote:true};
+    setCompanyDrafts(old=>[company,...old.filter(item=>item.id!==company.id)]);
+    return {...company,mode:'synced'};
+  }
+  const local={...payload,id:`company-${crypto.randomUUID()}`,state:'verification_pending',tagline:draft.tagline,website:draft.website,headquarters:draft.headquarters,country:draft.country,teamSize:draft.teamSize,model:draft.model,path:draft.path||'Startup / dev environment',createdAt:new Date().toISOString(),role:'owner',membershipState:'active',remote:false};
+  setCompanyDrafts(old=>[local,...old.filter(item=>item.id!==local.id)]);
+  return {...local,mode:'preview'};
+ }
  async function searchProfiles(query){const normalized=query.trim();if(normalized.length<2)return[];if(serviceState==='connected'&&auth?.accessToken)return api.identity.searchProfiles(normalized,10,auth.accessToken);const needle=normalized.toLowerCase();return people.filter(person=>`${person.name} ${person.role}`.toLowerCase().includes(needle)).map(person=>({id:person.id,displayName:person.name,headline:person.role,location:'Preview network'}));}
- async function inviteCompanyMember(company,person,role){let synced=false;if(company.remote&&serviceState==='connected'&&auth?.accessToken){await api.companies.invite(company.id,{profileId:person.id,role},auth.accessToken);synced=true}const invitation={id:person.id,name:person.displayName,headline:person.headline,role,state:'invited'};setCompanyInvitations(old=>({...old,[company.id]:[invitation,...(old[company.id]||[]).filter(item=>item.id!==person.id)]}));return synced?'synced':'preview';}
- async function acceptCompanyInvitation(companyId){if(serviceState==='connected'&&auth?.accessToken){await api.companies.acceptInvite(companyId,auth.accessToken);setCompanyDrafts(old=>old.map(c=>c.id===companyId?{...c,membershipState:'active'}:c));setToast('Joined company successfully!');return 'synced';}setCompanyDrafts(old=>old.map(c=>c.id===companyId?{...c,membershipState:'active'}:c));setToast('Joined company in Preview.');return 'preview';}
- async function createCompanyTask(company,title){const clean=title.trim();if(!clean)throw new Error('Give the task a clear title.');let remote=null;if(company.remote&&serviceState==='connected'&&auth?.accessToken)remote=await api.companies.createTask(company.id,{title:clean,description:'',assigneeId:null},auth.accessToken);const task={id:remote?.id||`company-task-${crypto.randomUUID()}`,title:clean,owner:profile.name,state:'To do',remote:Boolean(remote)};setCompanyTasks(old=>({...old,[company.id]:[task,...(old[company.id]||[])]}));return remote?'synced':'preview';}
- async function updateCompanyTask(company,task,state){const apiState={'To do':'todo','In progress':'in_progress','Review':'review','Done':'done'}[state];let remote=null;if(task.remote&&company.remote&&serviceState==='connected'&&auth?.accessToken)remote=await api.companies.updateTask(company.id,task.id,{state:apiState},auth.accessToken);setCompanyTasks(old=>({...old,[company.id]:(old[company.id]||[]).map(item=>item.id===task.id?{...item,state,remote:item.remote||Boolean(remote)}:item)}));return remote?'synced':'preview';}
+ async function inviteCompanyMember(company,person,role){
+  if(auth?.accessToken){
+    if(serviceState!=='connected'||!company.remote) throw new Error('Cannot invite members to an offline or unverified company workspace.');
+    await api.companies.invite(company.id,{profileId:person.id,role},auth.accessToken);
+    const invitation={id:person.id,name:person.displayName,headline:person.headline,role,state:'pending'};
+    setCompanyInvitations(old=>({...old,[company.id]:[invitation,...(old[company.id]||[]).filter(item=>item.id!==person.id)]}));
+    return 'synced';
+  }
+  const invitation={id:person.id,name:person.displayName,headline:person.headline,role,state:'pending'};
+  setCompanyInvitations(old=>({...old,[company.id]:[invitation,...(old[company.id]||[]).filter(item=>item.id!==person.id)]}));
+  return 'preview';
+ }
+ async function acceptCompanyInvitation(companyId){
+  if(auth?.accessToken){
+    if(serviceState!=='connected') throw new Error('An active connection is required to accept company invitations.');
+    await api.companies.acceptInvite(companyId,auth.accessToken);
+    setCompanyDrafts(old=>old.map(c=>c.id===companyId?{...c,membershipState:'active'}:c));
+    setToast('Joined company successfully!');
+    return 'synced';
+  }
+  setCompanyDrafts(old=>old.map(c=>c.id===companyId?{...c,membershipState:'active'}:c));
+  setToast('Joined company in Preview.');
+  return 'preview';
+ }
+ async function createCompanyTask(company,title){
+  const clean=title.trim();
+  if(!clean)throw new Error('Give the task a clear title.');
+  if(auth?.accessToken){
+    if(serviceState!=='connected'||!company.remote) throw new Error('An active connection is required to create company tasks.');
+    const remote=await api.companies.createTask(company.id,{title:clean,description:'',assigneeId:null},auth.accessToken);
+    const task={id:remote.id,title:clean,owner:profile.name,state:'To do',remote:true};
+    setCompanyTasks(old=>({...old,[company.id]:[task,...(old[company.id]||[])]}));
+    return {...task,mode:'synced'};
+  }
+  const local={id:`company-task-${crypto.randomUUID()}`,title:clean,owner:profile.name,state:'To do',remote:false};
+  setCompanyTasks(old=>({...old,[company.id]:[local,...(old[company.id]||[])]}));
+  return {...local,mode:'preview'};
+ }
+ async function updateCompanyTask(company,task,state){
+  const apiState={'To do':'todo','In progress':'in_progress','Review':'review','Done':'done'}[state];
+  if(auth?.accessToken){
+    if(serviceState!=='connected'||!company.remote) throw new Error('An active connection is required to update company tasks.');
+    const remote=await api.companies.updateTask(company.id,task.id,{state:apiState},auth.accessToken);
+    setCompanyTasks(old=>({...old,[company.id]:(old[company.id]||[]).map(item=>item.id===task.id?{...item,state,remote:true}:item)}));
+    return {...remote,mode:'synced'};
+  }
+  setCompanyTasks(old=>({...old,[company.id]:(old[company.id]||[]).map(item=>item.id===task.id?{...item,state}:item)}));
+  return 'preview';
+ }
  async function addCompanyDocument(company,file,draft){const upload=await uploadFile(file);let remote=null;if(upload.mode==='synced'&&company.remote&&serviceState==='connected'&&auth?.accessToken)remote=await api.companies.createDocument(company.id,{objectId:upload.attachment.objectId,title:draft.title.trim()||file.name,collection:draft.collection,accessScope:draft.accessScope},auth.accessToken);const document=remote?companyDocumentForUi(remote):{id:`company-document-${crypto.randomUUID()}`,objectId:upload.attachment.objectId,title:draft.title.trim()||file.name,filename:file.name,contentType:file.type||'application/octet-stream',bytes:file.size,collection:draft.collection,accessScope:draft.accessScope,createdAt:new Date().toISOString(),remote:false};setCompanyDocuments(old=>({...old,[company.id]:[document,...(old[company.id]||[])]}));return remote?'synced':'preview';}
  async function downloadCompanyDocument(company,document){if(document.remote&&company.remote&&serviceState==='connected'&&auth?.accessToken){try{await api.companies.downloadFile(company.id,document.id,auth.accessToken,document.filename);return 'synced';}catch(err){if(err.status===403){setToast('Access denied: Admin privileges required to download this document.');}else if(err.status===401){setToast('Session expired. Please sign in again.');}else{setToast(err.detail||err.message||'Could not download document.');}throw err;}}setToast(`${document.filename} is available in this Preview workspace.`);return 'preview';}
- async function archiveCompanyDocument(company,document){if(document.remote&&company.remote&&serviceState==='connected'&&auth?.accessToken)await api.companies.archiveDocument(company.id,document.id,auth.accessToken);setCompanyDocuments(old=>({...old,[company.id]:(old[company.id]||[]).filter(item=>item.id!==document.id)}));return document.remote?'synced':'preview';}
- async function createProject(draft){const payload={title:draft.title.trim()||'Untitled build',description:(draft.description||draft.problem||'A new code space ready for its first commit.').trim(),visibility:{'Private':'private','Share with collaborators':'team','Public':'public'}[draft.visibility]||'private'};let remote=null;if(serviceState==='connected'&&auth?.accessToken)remote=await api.projects.create(payload,auth.accessToken);const project={...draft,...payload,id:remote?.id||`project-${crypto.randomUUID()}`,state:remote?.state||'active',category:'Code space',tags:draft.tags||[],roles:'Builder',members:1,progress:8,color:'blue',tasks:[],membershipState:'active',createdAt:new Date().toISOString()};setProjectDrafts(old=>[project,...old.filter(item=>item.id!==project.id)]);setProjectState(old=>({...old,[project.id]:'joined'}));return {...project,mode:remote?'synced':'preview'};}
- async function saveProjectFile(projectId,draft){if(serviceState==='connected'&&auth?.accessToken){const remote=await api.projects.saveFile(projectId,draft,auth.accessToken);setProjectFiles(old=>({...old,[projectId]:[...(old[projectId]||[]).filter(f=>f.path!==draft.path),remote]}));return {file:remote,mode:'synced'};}const local={id:crypto.randomUUID(),projectId,path:draft.path,content:draft.content,fileType:draft.fileType||'text',updatedAt:new Date().toISOString()};setProjectFiles(old=>({...old,[projectId]:[...(old[projectId]||[]).filter(f=>f.path!==draft.path),local]}));return {file:local,mode:'preview'};}
- async function deleteProjectFile(projectId,fileId){if(serviceState==='connected'&&auth?.accessToken){await api.projects.deleteFile(projectId,fileId,auth.accessToken);}setProjectFiles(old=>({...old,[projectId]:(old[projectId]||[]).filter(f=>f.id!==fileId)}));}
- async function createProjectTask(projectId,taskDraft){if(serviceState==='connected'&&auth?.accessToken){const remote=await api.projects.createTask(projectId,taskDraft,auth.accessToken);setProjectTasks(old=>({...old,[projectId]:[remote,...(old[projectId]||[])]}));return {task:remote,mode:'synced'};}const local={id:crypto.randomUUID(),projectId,title:taskDraft.title,description:taskDraft.description,status:'todo',priority:taskDraft.priority||'medium',createdAt:new Date().toISOString()};setProjectTasks(old=>({...old,[projectId]:[local,...(old[projectId]||[])]}));return {task:local,mode:'preview'};}
- async function updateProjectTaskStatus(projectId,taskId,status){if(serviceState==='connected'&&auth?.accessToken){await api.projects.updateTaskStatus(projectId,taskId,status,auth.accessToken);}setProjectTasks(old=>({...old,[projectId]:(old[projectId]||[]).map(t=>t.id===taskId?{...t,status}:t)}));}
- async function createProjectMilestone(projectId,milestoneDraft){if(serviceState==='connected'&&auth?.accessToken){const remote=await api.projects.createMilestone(projectId,milestoneDraft,auth.accessToken);setProjectMilestones(old=>({...old,[projectId]:[...(old[projectId]||[]),remote]}));return {milestone:remote,mode:'synced'};}const local={id:crypto.randomUUID(),projectId,title:milestoneDraft.title,targetDate:milestoneDraft.targetDate,status:'open',createdAt:new Date().toISOString()};setProjectMilestones(old=>({...old,[projectId]:[...(old[projectId]||[]),local]}));return {milestone:local,mode:'preview'};}
- async function inviteProjectMember(project,person,role){let synced=false;if(project.remote&&serviceState==='connected'&&auth?.accessToken){await api.projects.invite(project.id,{profileId:person.id,role},auth.accessToken);synced=true}const invitation={id:person.id,name:person.displayName,headline:person.headline,role,state:'invited'};setProjectInvitations(old=>({...old,[project.id]:[invitation,...(old[project.id]||[]).filter(item=>item.id!==person.id)]}));return synced?'synced':'preview';}
- async function acceptProjectInvitation(projectId){if(serviceState==='connected'&&auth?.accessToken){await api.projects.acceptInvite(projectId,auth.accessToken);setProjectState(old=>({...old,[projectId]:'joined'}));setToast('Joined project successfully!');return 'synced';}setProjectState(old=>({...old,[projectId]:'joined'}));setToast('Joined project in Preview.');return 'preview';}
+ async function archiveCompanyDocument(company,document){
+  if(auth?.accessToken){
+    if(serviceState!=='connected'||!company.remote) throw new Error('An active connection is required to archive company documents.');
+    await api.companies.archiveDocument(company.id,document.id,auth.accessToken);
+    setCompanyDocuments(old=>({...old,[company.id]:(old[company.id]||[]).filter(item=>item.id!==document.id)}));
+    return 'synced';
+  }
+  setCompanyDocuments(old=>({...old,[company.id]:(old[company.id]||[]).filter(item=>item.id!==document.id)}));
+  return 'preview';
+ }
+ async function createProject(draft){
+  const payload={title:draft.title.trim()||'Untitled build',description:(draft.description||draft.problem||'A new code space ready for its first commit.').trim(),visibility:{'Private':'private','Share with collaborators':'team','Public':'public'}[draft.visibility]||'private'};
+  if(auth?.accessToken){
+    if(serviceState!=='connected') throw new Error('An active connection to Collobster is required to create a project.');
+    const remote=await api.projects.create(payload,auth.accessToken);
+    const project={
+      ...draft,
+      ...payload,
+      id:remote.id,
+      state:remote.state||'active',
+      category:'Code space',
+      tags:draft.tags||[],
+      roles:'owner',
+      members:1,
+      progress:8,
+      color:'blue',
+      tasks:[],
+      membershipState:'active',
+      createdAt:remote.createdAt||new Date().toISOString(),
+      remote:true
+    };
+    setProjectDrafts(old=>[project,...old.filter(item=>item.id!==project.id)]);
+    setProjectState(old=>({...old,[project.id]:'joined'}));
+    return {...project,mode:'synced'};
+  }
+  const local={
+    ...draft,
+    ...payload,
+    id:`project-${crypto.randomUUID()}`,
+    state:'active',
+    category:'Code space',
+    tags:draft.tags||[],
+    roles:'Builder',
+    members:1,
+    progress:8,
+    color:'blue',
+    tasks:[],
+    membershipState:'active',
+    createdAt:new Date().toISOString(),
+    remote:false
+  };
+  setProjectDrafts(old=>[local,...old.filter(item=>item.id!==local.id)]);
+  setProjectState(old=>({...old,[local.id]:'joined'}));
+  return {...local,mode:'preview'};
+ }
+ async function saveProjectFile(projectId,draft){
+  if(auth?.accessToken){
+    if(serviceState!=='connected') throw new Error('An active connection is required to save project files.');
+    const remote=await api.projects.saveFile(projectId,draft,auth.accessToken);
+    setProjectFiles(old=>({...old,[projectId]:[...(old[projectId]||[]).filter(f=>f.path!==draft.path),{...remote,remote:true}]}));
+    return {file:remote,mode:'synced'};
+  }
+  const local={id:crypto.randomUUID(),projectId,path:draft.path,content:draft.content,fileType:draft.fileType||'text',updatedAt:new Date().toISOString(),remote:false};
+  setProjectFiles(old=>({...old,[projectId]:[...(old[projectId]||[]).filter(f=>f.path!==draft.path),local]}));
+  return {file:local,mode:'preview'};
+ }
+ async function deleteProjectFile(projectId,fileId){
+  if(auth?.accessToken){
+    if(serviceState!=='connected') throw new Error('An active connection is required to delete project files.');
+    await api.projects.deleteFile(projectId,fileId,auth.accessToken);
+  }
+  setProjectFiles(old=>({...old,[projectId]:(old[projectId]||[]).filter(f=>f.id!==fileId)}));
+ }
+ async function createProjectTask(projectId,taskDraft){
+  if(auth?.accessToken){
+    if(serviceState!=='connected') throw new Error('An active connection is required to create project tasks.');
+    const remote=await api.projects.createTask(projectId,taskDraft,auth.accessToken);
+    setProjectTasks(old=>({...old,[projectId]:[{...remote,remote:true},...(old[projectId]||[])]}));
+    return {task:remote,mode:'synced'};
+  }
+  const local={id:crypto.randomUUID(),projectId,title:taskDraft.title,description:taskDraft.description,status:'todo',priority:taskDraft.priority||'medium',createdAt:new Date().toISOString(),remote:false};
+  setProjectTasks(old=>({...old,[projectId]:[local,...(old[projectId]||[])]}));
+  return {task:local,mode:'preview'};
+ }
+ async function updateProjectTaskStatus(projectId,taskId,status){
+  if(auth?.accessToken){
+    if(serviceState!=='connected') throw new Error('An active connection is required to update project tasks.');
+    await api.projects.updateTaskStatus(projectId,taskId,status,auth.accessToken);
+  }
+  setProjectTasks(old=>({...old,[projectId]:(old[projectId]||[]).map(t=>t.id===taskId?{...t,status}:t)}));
+ }
+ async function createProjectMilestone(projectId,milestoneDraft){
+  if(auth?.accessToken){
+    if(serviceState!=='connected') throw new Error('An active connection is required to create project milestones.');
+    const remote=await api.projects.createMilestone(projectId,milestoneDraft,auth.accessToken);
+    setProjectMilestones(old=>({...old,[projectId]:[...(old[projectId]||[]),{...remote,remote:true}]}));
+    return {milestone:remote,mode:'synced'};
+  }
+  const local={id:crypto.randomUUID(),projectId,title:milestoneDraft.title,targetDate:milestoneDraft.targetDate,status:'open',createdAt:new Date().toISOString(),remote:false};
+  setProjectMilestones(old=>({...old,[projectId]:[...(old[projectId]||[]),local]}));
+  return {milestone:local,mode:'preview'};
+ }
+ async function inviteProjectMember(project,person,role){
+  if(auth?.accessToken){
+    if(serviceState!=='connected'||!project.remote) throw new Error('Cannot invite members to an offline or unverified project.');
+    await api.projects.invite(project.id,{profileId:person.id,role},auth.accessToken);
+    const invitation={id:person.id,name:person.displayName,headline:person.headline,role,state:'pending'};
+    setProjectInvitations(old=>({...old,[project.id]:[invitation,...(old[project.id]||[]).filter(item=>item.id!==person.id)]}));
+    return 'synced';
+  }
+  const invitation={id:person.id,name:person.displayName,headline:person.headline,role,state:'pending'};
+  setProjectInvitations(old=>({...old,[project.id]:[invitation,...(old[project.id]||[]).filter(item=>item.id!==person.id)]}));
+  return 'preview';
+ }
+ async function acceptProjectInvitation(projectId){
+  if(auth?.accessToken){
+    if(serviceState!=='connected') throw new Error('An active connection is required to accept project invitations.');
+    await api.projects.acceptInvite(projectId,auth.accessToken);
+    setProjectDrafts(old=>old.map(p=>p.id===projectId?{...p,membershipState:'active'}:p));
+    setProjectState(old=>({...old,[projectId]:'joined'}));
+    setToast('Joined project successfully!');
+    return 'synced';
+  }
+  setProjectDrafts(old=>old.map(p=>p.id===projectId?{...p,membershipState:'active'}:p));
+  setProjectState(old=>({...old,[projectId]:'joined'}));
+  setToast('Joined project in Preview.');
+  return 'preview';
+ }
  async function registerForEvent(event){let remote=null;if(serviceState==='connected'&&auth?.accessToken){try{remote=await api.events.register(event.id,auth.accessToken);}catch(err){console.warn('Backend event registration fallback to local pass:',err);}}setRegistrations(old=>old.includes(event.id)?old:[...old,event.id]);return {event:remote,mode:remote?'synced':'preview'};}
  async function joinCommunity(community){let remote=null;if(serviceState==='connected'&&auth?.accessToken)remote=await api.communities.join(community.id,auth.accessToken);const state=remote?.membershipState||'member';setMemberships(old=>({...old,[community.id]:state}));return {state,mode:remote?'synced':'preview'};}
  async function leaveCommunity(community){let remote=false;if(serviceState==='connected'&&auth?.accessToken){try{await api.communities.leave(community.id,auth.accessToken);remote=true;}catch(e){}}setMemberships(old=>{const next={...old};delete next[community.id];return next;});return {mode:remote?'synced':'preview'};}

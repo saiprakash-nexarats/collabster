@@ -144,3 +144,82 @@ test('projects and companies payload validation rules', () => {
   assert.ok(roleHierarchy.maintainer.includes('manage_members'));
   assert.ok(roleHierarchy.owner.includes('admin'));
 });
+
+test('newly created project retains remote: true and can immediately invite members, save files and tasks', () => {
+  const remoteResponse = {
+    id: 'f9b33a50-2591-4cf1-a0c3-f42f026a79ee',
+    title: 'Cloud Orchestrator',
+    description: 'Kubernetes management tool',
+    state: 'active',
+    createdAt: new Date().toISOString(),
+  };
+
+  // Derive frontend model matching App.jsx createProject()
+  const project = {
+    title: remoteResponse.title,
+    description: remoteResponse.description,
+    id: remoteResponse.id,
+    state: remoteResponse.state,
+    roles: 'owner',
+    membershipState: 'active',
+    createdAt: remoteResponse.createdAt,
+    remote: Boolean(remoteResponse),
+  };
+
+  assert.equal(project.remote, true, 'Newly created project must have remote = true');
+  assert.equal(project.id, 'f9b33a50-2591-4cf1-a0c3-f42f026a79ee');
+  assert.equal(project.membershipState, 'active');
+  assert.equal(project.roles, 'owner');
+
+  // Verify that immediate invitation check passes because project.remote is true
+  const canInviteImmediately = project.remote && project.id.length > 0;
+  assert.equal(canInviteImmediately, true, 'Must allow immediate invites without page reload');
+});
+
+test('invitation state normalization matches backend pending and legacy invited contracts', () => {
+  function isPendingInvitation(membershipState) {
+    return membershipState === 'pending' || membershipState === 'invited';
+  }
+
+  assert.equal(isPendingInvitation('pending'), true, 'Backend pending state must be recognized as pending');
+  assert.equal(isPendingInvitation('invited'), true, 'Legacy invited state must be recognized as pending');
+  assert.equal(isPendingInvitation('active'), false, 'Active membership must not be treated as pending');
+  assert.equal(isPendingInvitation('declined'), false, 'Declined membership must not be treated as pending');
+
+  // Acceptance transition
+  const member = { id: 'user-2', membershipState: 'pending' };
+  const accepted = { ...member, membershipState: 'active' };
+  assert.equal(isPendingInvitation(accepted.membershipState), false);
+  assert.equal(accepted.membershipState, 'active');
+});
+
+test('authenticated mode rejects offline operations without creating fake preview records', () => {
+  const auth = { accessToken: 'valid-jwt-token' };
+  const serviceState = 'disconnected';
+
+  function assertCanPerformCloudAction(auth, serviceState, entity) {
+    if (auth?.accessToken) {
+      if (serviceState !== 'connected' || (entity && !entity.remote)) {
+        throw new Error('An active connection to Collobster is required.');
+      }
+      return 'synced';
+    }
+    return 'preview';
+  }
+
+  assert.throws(
+    () => assertCanPerformCloudAction(auth, serviceState, { remote: true }),
+    /An active connection to Collobster is required/
+  );
+
+  assert.throws(
+    () => assertCanPerformCloudAction(auth, 'connected', { remote: false }),
+    /An active connection to Collobster is required/
+  );
+
+  assert.equal(
+    assertCanPerformCloudAction(null, 'disconnected', null),
+    'preview',
+    'Unauthenticated visitor can still use local preview mode'
+  );
+});

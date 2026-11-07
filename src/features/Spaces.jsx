@@ -4612,7 +4612,7 @@ function ProjectTeamPanel({ project, app }) {
 
   return (
     <div className="team-workspace" style={{ padding: '24px' }}>
-      {project?.membershipState === 'invited' && (
+      {(project?.membershipState === 'pending' || project?.membershipState === 'invited') && (
         <div className="banner" style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--surface-sunken)', padding: '12px 16px', borderRadius: '8px' }}>
           <span>You have been invited to collaborate on this project.</span>
           <Button variant="primary" onClick={handleAccept} disabled={loading}>
@@ -5105,7 +5105,7 @@ function CompanyTeamPanel({ app, company }) {
 
   return (
     <div className="team-workspace">
-      {company?.membershipState === 'invited' && (
+      {(company?.membershipState === 'pending' || company?.membershipState === 'invited') && (
         <div className="banner" style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--surface-sunken)', padding: '12px 16px', borderRadius: '8px' }}>
           <span>You have been invited to join this company.</span>
           <Button variant="primary" onClick={async () => {

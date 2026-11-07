@@ -22,3 +22,4 @@ CTRL-CMP-007,Companies,CompanyDocuments (Spaces.jsx),Button "Archive document",C
 CTRL-CMP-008,Companies,CompanyTeamPanel (Spaces.jsx),Form "Search profiles",Search user to invite,searchProfiles(),api.identity.searchProfiles,GET /v1/identity/profiles?query={q},Returns matching discoverable profiles,Requires at least 2 chars; handles empty results,TEST-CMP-FE-008
 CTRL-CMP-009,Companies,CompanyTeamPanel (Spaces.jsx),Button "Invite collaborator",Click sends invitation,inviteCompanyMember(),api.companies.invite,POST /v1/companies/{id}/members,Persists pending company member in DB,Rejects owner role; requires company admin; shows error toast,TEST-CMP-FE-009
 CTRL-CMP-010,Companies,CompanyTeamPanel (Spaces.jsx),Button "Accept Invitation",Click accepts pending invite,acceptCompanyInvitation(),api.companies.acceptInvite,POST /v1/companies/{id}/membership/accept,Transitions company membership to active in DB,Shows error toast if already accepted or revoked,TEST-CMP-FE-010
+
