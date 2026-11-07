@@ -29,3 +29,4 @@ public class CreateServiceListingRequest {
     private String pricingType;
     private String highlights;
 }
+

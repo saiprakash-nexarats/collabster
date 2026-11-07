@@ -24,3 +24,4 @@ public class CreatePaymentOrderRequest {
     private UUID bookingId;
     private String idempotencyKey;
 }
+

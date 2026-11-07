@@ -16,3 +16,4 @@ public interface ServiceManagementService {
     List<ServiceReviewDto> listReviews(UUID serviceId);
     ServiceReviewDto createReview(UUID serviceId, CreateServiceReviewRequest request, Long authorId);
 }
+

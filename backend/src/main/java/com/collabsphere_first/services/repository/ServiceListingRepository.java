@@ -15,3 +15,4 @@ public interface ServiceListingRepository extends JpaRepository<ServiceListing, 
     List<ServiceListing> findByProviderIdOrderByCreatedAtDesc(Long providerId);
     Optional<ServiceListing> findByIdAndState(UUID id, String state);
 }
+

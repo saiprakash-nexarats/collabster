@@ -13,3 +13,4 @@ public interface PaymentGatewayProvider {
     record GatewayPayoutResult(boolean success, String gatewayPayoutId, String status) {}
     record GatewayReconciliationResult(boolean exists, String status, long amountCents, String currency) {}
 }
+

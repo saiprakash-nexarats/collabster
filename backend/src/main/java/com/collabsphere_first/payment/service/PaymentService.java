@@ -14,3 +14,4 @@ public interface PaymentService {
     PayoutRequestDto requestPayout(CreatePayoutRequest request, Long providerId);
     List<PayoutRequestDto> listUserPayouts(Long providerId);
 }
+

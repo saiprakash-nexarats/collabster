@@ -14,7 +14,7 @@ import java.util.UUID;
         @Index(name = "idx_service_listings_provider", columnList = "provider_id"),
         @Index(name = "idx_service_listings_category", columnList = "category"),
         @Index(name = "idx_service_listings_state", columnList = "state"),
-        @Index(name = "idx_service_listings_created", columnList = "created_at DESC")
+        @Index(name = "idx_service_listings_created", columnList = "created_at")
 })
 @Getter
 @Setter
@@ -99,3 +99,4 @@ public class ServiceListing {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 }
+

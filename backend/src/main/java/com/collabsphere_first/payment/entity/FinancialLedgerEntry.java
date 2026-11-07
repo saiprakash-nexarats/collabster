@@ -9,7 +9,7 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "financial_ledger_entries", indexes = {
-        @Index(name = "idx_financial_ledger_user", columnList = "user_id, created_at DESC")
+        @Index(name = "idx_financial_ledger_user", columnList = "user_id, created_at")
 })
 @Getter
 @Setter
@@ -51,3 +51,4 @@ public class FinancialLedgerEntry {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 }
+

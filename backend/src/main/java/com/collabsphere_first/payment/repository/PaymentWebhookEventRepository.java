@@ -12,3 +12,4 @@ public interface PaymentWebhookEventRepository extends JpaRepository<PaymentWebh
     Optional<PaymentWebhookEvent> findByEventId(String eventId);
     boolean existsByEventId(String eventId);
 }
+

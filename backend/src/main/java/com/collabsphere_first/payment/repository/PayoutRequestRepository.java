@@ -13,3 +13,4 @@ public interface PayoutRequestRepository extends JpaRepository<PayoutRequest, UU
     List<PayoutRequest> findByProviderIdOrderByCreatedAtDesc(Long providerId);
     Optional<PayoutRequest> findByIdAndProviderId(UUID id, Long providerId);
 }
+

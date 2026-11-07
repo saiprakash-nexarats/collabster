@@ -22,3 +22,4 @@ public interface ServiceReviewRepository extends JpaRepository<ServiceReview, UU
     @Query("SELECT COUNT(r) FROM ServiceReview r WHERE r.serviceId = :serviceId")
     Long countByServiceId(@Param("serviceId") UUID serviceId);
 }
+

@@ -10,3 +10,4 @@ import lombok.*;
 public class ConfirmPaymentOrderRequest {
     private String gatewayPaymentId;
 }
+

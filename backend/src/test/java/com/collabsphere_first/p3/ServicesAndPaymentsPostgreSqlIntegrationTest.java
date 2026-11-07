@@ -419,27 +419,26 @@ public class ServicesAndPaymentsPostgreSqlIntegrationTest {
                 readyLatch.countDown();
                 try {
                     startLatch.await();
-                    // Each thread attempts to claim certificate; idempotency check prevents duplicate insertion
-                    tx.execute(status -> {
+                    // Each thread attempts to claim certificate; idempotency check and unique constraint prevent duplicate insertion
+                    Boolean success = tx.execute(status -> {
                         boolean alreadyClaimed = courseCertificateRepository.findByCourseIdAndUserId(courseId, customer.getId()).isPresent();
-                        if (!alreadyClaimed) {
-                            try {
-                                courseCertificateRepository.save(CourseCertificate.builder()
-                                        .courseId(courseId)
-                                        .userId(customer.getId())
-                                        .recipientName("Divya Sharma")
-                                        .certificateNumber("CERT-CONCURRENT-" + UUID.randomUUID().toString().substring(0, 8))
-                                        .verificationHash("hash-" + index)
-                                        .build());
-                                issuedCount.incrementAndGet();
-                            } catch (Exception e) {
-                                idempotentCount.incrementAndGet();
-                            }
-                        } else {
-                            idempotentCount.incrementAndGet();
+                        if (alreadyClaimed) {
+                            return false;
                         }
-                        return null;
+                        courseCertificateRepository.saveAndFlush(CourseCertificate.builder()
+                                .courseId(courseId)
+                                .userId(customer.getId())
+                                .recipientName("Divya Sharma")
+                                .certificateNumber("CERT-CONCURRENT-" + UUID.randomUUID().toString().substring(0, 8))
+                                .verificationHash("hash-" + index)
+                                .build());
+                        return true;
                     });
+                    if (Boolean.TRUE.equals(success)) {
+                        issuedCount.incrementAndGet();
+                    } else {
+                        idempotentCount.incrementAndGet();
+                    }
                 } catch (Exception e) {
                     idempotentCount.incrementAndGet();
                 }

@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS service_listings (
 CREATE INDEX IF NOT EXISTS idx_service_listings_provider ON service_listings(provider_id);
 CREATE INDEX IF NOT EXISTS idx_service_listings_category ON service_listings(category);
 CREATE INDEX IF NOT EXISTS idx_service_listings_state ON service_listings(state);
-CREATE INDEX IF NOT EXISTS idx_service_listings_created ON service_listings(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_service_listings_created ON service_listings(created_at);
 
 CREATE TABLE IF NOT EXISTS service_bookings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -74,6 +74,7 @@ CREATE TABLE IF NOT EXISTS service_reviews (
     review_text TEXT,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_service_review_author UNIQUE (service_id, author_id),
     CONSTRAINT chk_service_reviews_rating CHECK (rating >= 1 AND rating <= 5)
 );
 
@@ -106,7 +107,7 @@ CREATE TABLE IF NOT EXISTS payment_orders (
 
 CREATE INDEX IF NOT EXISTS idx_payment_orders_user ON payment_orders(user_id);
 CREATE INDEX IF NOT EXISTS idx_payment_orders_status ON payment_orders(status);
-CREATE INDEX IF NOT EXISTS idx_payment_orders_created ON payment_orders(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_payment_orders_created ON payment_orders(created_at);
 
 CREATE TABLE IF NOT EXISTS payment_transactions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -170,4 +171,5 @@ CREATE TABLE IF NOT EXISTS financial_ledger_entries (
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX IF NOT EXISTS idx_financial_ledger_user ON financial_ledger_entries(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_financial_ledger_user ON financial_ledger_entries(user_id, created_at);
+

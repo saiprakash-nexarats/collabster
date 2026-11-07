@@ -26,3 +26,4 @@ public class PayoutRequestDto {
     private Instant createdAt;
     private Instant updatedAt;
 }
+

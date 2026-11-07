@@ -22,3 +22,4 @@ public class CreateServiceReviewRequest {
     private String reviewText;
     private UUID bookingId;
 }
+

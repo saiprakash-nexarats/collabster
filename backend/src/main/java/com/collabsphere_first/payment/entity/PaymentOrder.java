@@ -12,7 +12,7 @@ import java.util.UUID;
 @Table(name = "payment_orders", indexes = {
         @Index(name = "idx_payment_orders_user", columnList = "user_id"),
         @Index(name = "idx_payment_orders_status", columnList = "status"),
-        @Index(name = "idx_payment_orders_created", columnList = "created_at DESC")
+        @Index(name = "idx_payment_orders_created", columnList = "created_at")
 })
 @Getter
 @Setter
@@ -72,3 +72,4 @@ public class PaymentOrder {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 }
+

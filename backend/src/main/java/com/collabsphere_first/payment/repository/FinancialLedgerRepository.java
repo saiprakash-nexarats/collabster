@@ -16,3 +16,4 @@ public interface FinancialLedgerRepository extends JpaRepository<FinancialLedger
     @Query("SELECT COALESCE(SUM(CASE WHEN e.entryType IN ('PAYMENT_CREDIT', 'ESCROW_RELEASE') THEN e.amountCents ELSE -e.amountCents END), 0) FROM FinancialLedgerEntry e WHERE e.userId = :userId")
     Long calculateUserBalanceCents(@Param("userId") Long userId);
 }
+

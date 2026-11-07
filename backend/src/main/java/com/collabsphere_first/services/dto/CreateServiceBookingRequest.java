@@ -21,3 +21,4 @@ public class CreateServiceBookingRequest {
     private String notes;
     private String milestones;
 }
+

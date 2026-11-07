@@ -35,3 +35,4 @@ public class ServiceBookingDto {
     private Instant createdAt;
     private Instant updatedAt;
 }
+

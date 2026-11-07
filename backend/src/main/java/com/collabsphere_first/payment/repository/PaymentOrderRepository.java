@@ -16,3 +16,4 @@ public interface PaymentOrderRepository extends JpaRepository<PaymentOrder, UUID
     List<PaymentOrder> findByUserIdOrderByCreatedAtDesc(Long userId);
     Optional<PaymentOrder> findByGatewayOrderId(String gatewayOrderId);
 }
+

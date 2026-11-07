@@ -11,3 +11,4 @@ import java.util.UUID;
 public interface PaymentTransactionRepository extends JpaRepository<PaymentTransaction, UUID> {
     List<PaymentTransaction> findByOrderIdOrderByCreatedAtDesc(UUID orderId);
 }
+

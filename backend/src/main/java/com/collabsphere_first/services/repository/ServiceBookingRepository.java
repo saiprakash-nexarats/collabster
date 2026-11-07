@@ -35,3 +35,4 @@ public interface ServiceBookingRepository extends JpaRepository<ServiceBooking, 
     @Query("UPDATE ServiceBooking b SET b.status = :newStatus, b.updatedAt = :now WHERE b.id = :bookingId AND b.status = :expectedStatus")
     int updateStatusAtomically(@Param("bookingId") UUID bookingId, @Param("expectedStatus") String expectedStatus, @Param("newStatus") String newStatus, @Param("now") Instant now);
 }
+

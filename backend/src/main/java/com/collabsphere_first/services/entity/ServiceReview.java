@@ -9,10 +9,14 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "service_reviews", indexes = {
-        @Index(name = "idx_service_reviews_service", columnList = "service_id"),
-        @Index(name = "idx_service_reviews_author", columnList = "author_id")
-})
+@Table(name = "service_reviews",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uq_service_review_author", columnNames = {"service_id", "author_id"})
+        },
+        indexes = {
+                @Index(name = "idx_service_reviews_service", columnList = "service_id"),
+                @Index(name = "idx_service_reviews_author", columnList = "author_id")
+        })
 @Getter
 @Setter
 @NoArgsConstructor
@@ -50,3 +54,4 @@ public class ServiceReview {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 }
+
