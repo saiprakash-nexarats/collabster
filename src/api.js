@@ -1,4 +1,4 @@
-const configuredBaseUrl = import.meta.env?.VITE_API_URL?.replace(/\/$/, '');
+const configuredBaseUrl = ((typeof process !== 'undefined' && process.env?.VITE_API_URL) ? process.env.VITE_API_URL : (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL ? import.meta.env.VITE_API_URL : '')).replace(/\/$/, '');
 
 export class ApiError extends Error {
     constructor({ status = 0, code = 'request_failed', detail = 'The request could not be completed', fields = {} } = {}) { super(detail); this.name = 'ApiError'; this.status = status; this.code = code; this.detail = detail; this.fields = fields; this.retryable = status === 0 || status >= 500; }
