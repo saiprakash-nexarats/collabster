@@ -46,10 +46,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest(properties = {
         "spring.flyway.enabled=true",
-        "spring.jpa.hibernate.ddl-auto=validate"
+        "spring.jpa.hibernate.ddl-auto=validate",
+        "jwt.secret=c2FpLXByYWthc2gtbmV4YXJhdHMtY29sbGFic3Rlci10ZXN0LWp3dC1zZWNyZXQta2V5LXNob3VsZC1iZS1hdC1sZWFzdC0yNTYtYml0cy02NC1jaGFyYWN0ZXJzLWxvbmchIQ=="
 })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@ActiveProfiles("prod")
+@ActiveProfiles("test")
 @DisplayName("Real PostgreSQL 17 & Flyway V1-V36 Integration Tests")
 class ProjectsAndCompaniesPostgreSqlIntegrationTest {
 
@@ -57,6 +58,9 @@ class ProjectsAndCompaniesPostgreSqlIntegrationTest {
         try (Socket socket = new Socket("localhost", 5432)) {
             return true;
         } catch (Exception e) {
+            if ("true".equalsIgnoreCase(System.getenv("CI"))) {
+                throw new IllegalStateException("PostgreSQL 17 is required in CI environment but unreachable on localhost:5432", e);
+            }
             return false;
         }
     }
@@ -278,3 +282,4 @@ class ProjectsAndCompaniesPostgreSqlIntegrationTest {
         assertThat(docsAfterArchive).isEmpty();
     }
 }
+

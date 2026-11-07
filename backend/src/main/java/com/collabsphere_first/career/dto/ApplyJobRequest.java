@@ -15,3 +15,4 @@ public class ApplyJobRequest {
     private UUID resumeObjectId;
     private String note;
 }
+

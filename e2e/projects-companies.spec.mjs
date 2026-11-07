@@ -106,3 +106,4 @@ test.describe('Projects and Companies End-to-End User Journeys', () => {
     await expect(page.locator('#main-content')).toBeVisible();
   });
 });
+

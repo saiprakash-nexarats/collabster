@@ -18,3 +18,4 @@ public interface LearningService {
     CourseCertificateDto verifyCertificate(String certificateNumber);
     LessonExerciseDto getLessonExercise(UUID courseId, UUID lessonId, Long userId);
 }
+

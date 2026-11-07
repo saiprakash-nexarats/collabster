@@ -21,3 +21,4 @@ public class AddLessonRequest {
     private Integer orderIndex;
     private Integer durationMinutes;
 }
+

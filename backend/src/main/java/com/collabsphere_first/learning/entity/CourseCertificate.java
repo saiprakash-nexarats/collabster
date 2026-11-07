@@ -44,3 +44,4 @@ public class CourseCertificate {
     @Column(name = "issued_at", nullable = false, updatable = false)
     private Instant issuedAt;
 }
+

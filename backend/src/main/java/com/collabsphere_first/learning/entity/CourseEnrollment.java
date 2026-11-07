@@ -46,3 +46,4 @@ public class CourseEnrollment {
     @Column(name = "completed_at")
     private Instant completedAt;
 }
+

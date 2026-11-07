@@ -174,3 +174,4 @@ CREATE TABLE IF NOT EXISTS career_applications (
 CREATE INDEX IF NOT EXISTS idx_career_applications_job ON career_applications(job_id);
 CREATE INDEX IF NOT EXISTS idx_career_applications_applicant ON career_applications(applicant_id);
 CREATE INDEX IF NOT EXISTS idx_career_applications_state ON career_applications(state);
+

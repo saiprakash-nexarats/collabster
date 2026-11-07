@@ -7,6 +7,11 @@ import com.collabsphere_first.career.repository.CareerApplicationRepository;
 import com.collabsphere_first.career.repository.CareerJobRepository;
 import com.collabsphere_first.career.service.impl.CareerServiceImpl;
 import com.collabsphere_first.community.exception.ResourceNotFoundException;
+import com.collabsphere_first.storage.dto.StorageFileResource;
+import com.collabsphere_first.storage.entity.StorageObject;
+import com.collabsphere_first.storage.enums.UploadState;
+import com.collabsphere_first.storage.provider.ObjectStorageProvider;
+import com.collabsphere_first.storage.repository.StorageObjectRepository;
 import com.collabsphere_first.user.entity.User;
 import com.collabsphere_first.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,6 +23,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.access.AccessDeniedException;
 
+import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -37,6 +44,10 @@ class CareerServiceTest {
     private CareerApplicationRepository applicationRepository;
     @Mock
     private UserRepository userRepository;
+    @Mock
+    private StorageObjectRepository storageObjectRepository;
+    @Mock
+    private ObjectStorageProvider storageProvider;
 
     @InjectMocks
     private CareerServiceImpl careerService;
@@ -181,4 +192,127 @@ class CareerServiceTest {
         assertThat(reviewed.getState()).isEqualTo("shortlisted");
         assertThat(reviewed.getReviewNotes()).isEqualTo("Strong candidate profile");
     }
+
+    @Test
+    @DisplayName("Apply validates attached resume object ownership, completed state, and MIME type")
+    void testResumeValidationOnApply() {
+        UUID resumeId = UUID.randomUUID();
+        when(jobRepository.findById(jobId)).thenReturn(Optional.of(job));
+        when(applicationRepository.findByJobIdAndApplicantId(jobId, applicantId)).thenReturn(Optional.empty());
+
+        // 1. Storage object owned by someone else throws AccessDeniedException
+        StorageObject otherUserResume = StorageObject.builder()
+                .id(resumeId)
+                .ownerId(999L)
+                .filename("resume.pdf")
+                .contentType("application/pdf")
+                .uploadState(UploadState.COMPLETED)
+                .build();
+        when(storageObjectRepository.findByIdAndIsDeletedFalse(resumeId)).thenReturn(Optional.of(otherUserResume));
+
+        ApplyJobRequest requestWithResume = ApplyJobRequest.builder()
+                .resumeObjectId(resumeId)
+                .note("Resume attached")
+                .build();
+
+        assertThatThrownBy(() -> careerService.apply(jobId, requestWithResume, applicantId))
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessageContaining("Applicant does not own this resume object");
+
+        // 2. Storage object with pending/incomplete upload throws IllegalStateException
+        StorageObject incompleteResume = StorageObject.builder()
+                .id(resumeId)
+                .ownerId(applicantId)
+                .filename("resume.pdf")
+                .contentType("application/pdf")
+                .uploadState(UploadState.PENDING)
+                .build();
+        when(storageObjectRepository.findByIdAndIsDeletedFalse(resumeId)).thenReturn(Optional.of(incompleteResume));
+
+        assertThatThrownBy(() -> careerService.apply(jobId, requestWithResume, applicantId))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Resume file upload has not been completed");
+
+        // 3. Storage object with disallowed MIME type throws IllegalArgumentException
+        StorageObject invalidTypeResume = StorageObject.builder()
+                .id(resumeId)
+                .ownerId(applicantId)
+                .filename("image.png")
+                .contentType("image/png")
+                .uploadState(UploadState.COMPLETED)
+                .build();
+        when(storageObjectRepository.findByIdAndIsDeletedFalse(resumeId)).thenReturn(Optional.of(invalidTypeResume));
+
+        assertThatThrownBy(() -> careerService.apply(jobId, requestWithResume, applicantId))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Invalid resume format");
+
+        // 4. Valid completed PDF resume succeeds
+        StorageObject validResume = StorageObject.builder()
+                .id(resumeId)
+                .ownerId(applicantId)
+                .filename("candidate_cv.pdf")
+                .contentType("application/pdf")
+                .uploadState(UploadState.COMPLETED)
+                .build();
+        when(storageObjectRepository.findByIdAndIsDeletedFalse(resumeId)).thenReturn(Optional.of(validResume));
+        when(applicationRepository.save(any(CareerApplication.class))).thenAnswer(i -> {
+            CareerApplication a = i.getArgument(0);
+            a.setId(UUID.randomUUID());
+            return a;
+        });
+
+        CareerApplicationDto submitted = careerService.apply(jobId, requestWithResume, applicantId);
+        assertThat(submitted.getResumeObjectId()).isEqualTo(resumeId);
+        assertThat(submitted.getState()).isEqualTo("submitted");
+    }
+
+    @Test
+    @DisplayName("Download resume allows employer and applicant, but rejects unauthorized third parties")
+    void testDownloadResumeAuthorization() {
+        UUID appId = UUID.randomUUID();
+        UUID resumeId = UUID.randomUUID();
+        CareerApplication app = CareerApplication.builder()
+                .id(appId)
+                .jobId(jobId)
+                .applicantId(applicantId)
+                .resumeObjectId(resumeId)
+                .state("submitted")
+                .build();
+
+        when(applicationRepository.findById(appId)).thenReturn(Optional.of(app));
+        when(jobRepository.findById(jobId)).thenReturn(Optional.of(job));
+
+        Long thirdPartyUser = 777L;
+        assertThatThrownBy(() -> careerService.downloadResume(appId, thirdPartyUser))
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessageContaining("Only the employer or the applicant can download this resume");
+
+        StorageObject validResume = StorageObject.builder()
+                .id(resumeId)
+                .ownerId(applicantId)
+                .filename("cv.pdf")
+                .contentType("application/pdf")
+                .storageKey("resumes/" + resumeId)
+                .uploadState(UploadState.COMPLETED)
+                .verifiedBytes(1024L)
+                .build();
+
+        when(storageObjectRepository.findByIdAndIsDeletedFalse(resumeId)).thenReturn(Optional.of(validResume));
+        when(storageProvider.retrieveObject("resumes/" + resumeId))
+                .thenReturn(new ByteArrayInputStream("PDF_DATA".getBytes(StandardCharsets.UTF_8)));
+
+        // Employer can download
+        StorageFileResource employerDownload = careerService.downloadResume(appId, employerId);
+        assertThat(employerDownload).isNotNull();
+        assertThat(employerDownload.getFilename()).isEqualTo("cv.pdf");
+
+        // Applicant can also download
+        when(storageProvider.retrieveObject("resumes/" + resumeId))
+                .thenReturn(new ByteArrayInputStream("PDF_DATA".getBytes(StandardCharsets.UTF_8)));
+        StorageFileResource applicantDownload = careerService.downloadResume(appId, applicantId);
+        assertThat(applicantDownload).isNotNull();
+        assertThat(applicantDownload.getFilename()).isEqualTo("cv.pdf");
+    }
 }
+

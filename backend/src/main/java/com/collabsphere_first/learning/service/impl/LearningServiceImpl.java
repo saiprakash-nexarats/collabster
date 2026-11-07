@@ -250,16 +250,30 @@ public class LearningServiceImpl implements LearningService {
                 .verificationHash(hash)
                 .build();
 
-        CourseCertificate saved = courseCertificateRepository.save(cert);
-        return CourseCertificateDto.builder()
-                .id(saved.getId())
-                .courseId(saved.getCourseId())
-                .courseTitle(course.getTitle())
-                .recipientName(saved.getRecipientName())
-                .certificateNumber(saved.getCertificateNumber())
-                .verificationHash(saved.getVerificationHash())
-                .issuedAt(saved.getIssuedAt())
-                .build();
+        try {
+            CourseCertificate saved = courseCertificateRepository.save(cert);
+            return CourseCertificateDto.builder()
+                    .id(saved.getId())
+                    .courseId(saved.getCourseId())
+                    .courseTitle(course.getTitle())
+                    .recipientName(saved.getRecipientName())
+                    .certificateNumber(saved.getCertificateNumber())
+                    .verificationHash(saved.getVerificationHash())
+                    .issuedAt(saved.getIssuedAt())
+                    .build();
+        } catch (org.springframework.dao.DataIntegrityViolationException ex) {
+            return courseCertificateRepository.findByCourseIdAndUserId(courseId, userId)
+                    .map(existingCert -> CourseCertificateDto.builder()
+                            .id(existingCert.getId())
+                            .courseId(existingCert.getCourseId())
+                            .courseTitle(course.getTitle())
+                            .recipientName(existingCert.getRecipientName())
+                            .certificateNumber(existingCert.getCertificateNumber())
+                            .verificationHash(existingCert.getVerificationHash())
+                            .issuedAt(existingCert.getIssuedAt())
+                            .build())
+                    .orElseThrow(() -> ex);
+        }
     }
 
     @Override

@@ -14,3 +14,4 @@ public interface CourseLessonRepository extends JpaRepository<CourseLesson, UUID
     Optional<CourseLesson> findByCourseIdAndId(UUID courseId, UUID id);
     long countByCourseId(UUID courseId);
 }
+

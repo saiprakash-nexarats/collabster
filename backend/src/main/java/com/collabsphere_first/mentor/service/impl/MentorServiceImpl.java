@@ -142,8 +142,12 @@ public class MentorServiceImpl implements MentorService {
             throw new IllegalStateException("This slot has already been booked");
         }
 
+        int updated = mentorSlotRepository.reserveSlotAtomically(slotId, Instant.now());
+        if (updated == 0) {
+            throw new IllegalStateException("This slot has already been booked");
+        }
+
         slot.setBooked(true);
-        mentorSlotRepository.save(slot);
 
         MentorSession session = MentorSession.builder()
                 .mentorId(slot.getMentorId())
@@ -203,3 +207,4 @@ public class MentorServiceImpl implements MentorService {
                 .build();
     }
 }
+

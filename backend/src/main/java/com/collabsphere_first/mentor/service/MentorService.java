@@ -17,3 +17,4 @@ public interface MentorService {
     MentorSlotDto createSlot(CreateMentorSlotRequest request, Long mentorId);
     Map<String, Object> bookSlot(UUID slotId, BookMentorSlotRequest request, Long learnerId);
 }
+

@@ -21,3 +21,4 @@ public class RequestSessionRequest {
 
     private Integer durationMinutes;
 }
+

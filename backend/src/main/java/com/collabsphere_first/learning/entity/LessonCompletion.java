@@ -35,3 +35,4 @@ public class LessonCompletion {
     @Column(name = "completed_at", nullable = false, updatable = false)
     private Instant completedAt;
 }
+

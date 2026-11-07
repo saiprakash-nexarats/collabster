@@ -12,3 +12,4 @@ public interface CareerJobRepository extends JpaRepository<CareerJob, UUID> {
     List<CareerJob> findByStateOrderByCreatedAtDesc(String state);
     List<CareerJob> findByEmployerIdOrderByCreatedAtDesc(Long employerId);
 }
+

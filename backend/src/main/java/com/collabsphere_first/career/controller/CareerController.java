@@ -4,10 +4,14 @@ import com.collabsphere_first.career.dto.*;
 import com.collabsphere_first.career.service.CareerService;
 import com.collabsphere_first.community.dto.ApiResponse;
 import com.collabsphere_first.security.service.CurrentUserService;
+import com.collabsphere_first.storage.dto.StorageFileResource;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -83,4 +87,17 @@ public class CareerController {
         CareerApplicationDto application = careerService.reviewApplication(jobId, applicationId, request, currentUserId);
         return ResponseEntity.ok(ApiResponse.success(application));
     }
+
+    @GetMapping({"/applications/{applicationId}/resume", "/jobs/{jobId}/applications/{applicationId}/resume"})
+    public ResponseEntity<Resource> downloadResume(
+            @PathVariable UUID applicationId
+    ) {
+        Long currentUserId = currentUserService.getCurrentUser().getId();
+        StorageFileResource fileResource = careerService.downloadResume(applicationId, currentUserId);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(fileResource.getContentType()))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileResource.getFilename() + "\"")
+                .body(fileResource.getResource());
+    }
 }
+

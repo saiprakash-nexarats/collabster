@@ -187,4 +187,33 @@ class LearningServiceTest {
         assertThatThrownBy(() -> learningService.verifyCertificate("NONEXISTENT"))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
+
+    @Test
+    @DisplayName("Claim certificate handles concurrent race condition idempotently")
+    void testClaimCertificateConcurrentRaceConditionIdempotency() {
+        CourseLesson l1 = CourseLesson.builder().id(UUID.randomUUID()).courseId(courseId).build();
+        when(courseRepository.findById(courseId)).thenReturn(Optional.of(course));
+        when(courseLessonRepository.findByCourseIdOrderByOrderIndexAsc(courseId)).thenReturn(List.of(l1));
+        when(lessonCompletionRepository.countByUserIdAndLessonIdIn(eq(userId), anyList())).thenReturn(1L);
+        when(courseCertificateRepository.findByCourseIdAndUserId(courseId, userId))
+                .thenReturn(Optional.empty()) // First check before insert
+                .thenReturn(Optional.of(CourseCertificate.builder()
+                        .id(UUID.randomUUID())
+                        .courseId(courseId)
+                        .userId(userId)
+                        .certificateNumber("COLLOB-2026-CONCURRENT")
+                        .verificationHash("concurrent_hash")
+                        .recipientName("Aarav Patel")
+                        .build())); // Second check on DataIntegrityViolationException
+
+        User user = User.builder().id(userId).firstName("Aarav").lastName("Patel").email("aarav@collobster.com").build();
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        when(courseCertificateRepository.save(any(CourseCertificate.class)))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("Unique index violation"));
+
+        CourseCertificateDto dto = learningService.claimCertificate(courseId, userId);
+        assertThat(dto).isNotNull();
+        assertThat(dto.getCertificateNumber()).isEqualTo("COLLOB-2026-CONCURRENT");
+    }
 }

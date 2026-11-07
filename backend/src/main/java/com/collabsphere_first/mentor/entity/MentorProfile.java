@@ -61,3 +61,4 @@ public class MentorProfile {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 }
+

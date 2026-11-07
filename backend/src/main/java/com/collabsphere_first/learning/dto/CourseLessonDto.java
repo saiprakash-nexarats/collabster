@@ -21,3 +21,4 @@ public class CourseLessonDto {
     private Integer durationMinutes;
     private Boolean completed;
 }
+

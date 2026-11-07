@@ -19,3 +19,4 @@ public class MentorSlotDto {
     private Integer durationMinutes;
     private Boolean booked;
 }
+

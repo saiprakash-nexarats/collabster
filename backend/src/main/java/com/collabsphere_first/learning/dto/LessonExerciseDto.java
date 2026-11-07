@@ -16,3 +16,4 @@ public class LessonExerciseDto {
     private String exercisePrompt;
     private String starterCode;
 }
+

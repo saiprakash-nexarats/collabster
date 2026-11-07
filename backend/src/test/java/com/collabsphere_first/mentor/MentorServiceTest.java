@@ -26,6 +26,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -113,7 +114,7 @@ class MentorServiceTest {
                 .build();
 
         when(slotRepository.findById(slotId)).thenReturn(Optional.of(availableSlot));
-        when(slotRepository.save(any(MentorSlot.class))).thenAnswer(i -> i.getArgument(0));
+        when(slotRepository.reserveSlotAtomically(eq(slotId), any(Instant.class))).thenReturn(1);
         when(sessionRepository.save(any(MentorSession.class))).thenAnswer(i -> {
             MentorSession s = i.getArgument(0);
             s.setId(UUID.randomUUID());
@@ -131,6 +132,13 @@ class MentorServiceTest {
         assertThat(availableSlot.getBooked()).isTrue();
 
         // Attempting to book again when slot.booked == true fails
+        assertThatThrownBy(() -> mentorService.bookSlot(slotId, request, learnerId))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("already been booked");
+
+        // Concurrent race condition: slot appears unbooked but atomic update returns 0 rows updated
+        availableSlot.setBooked(false);
+        when(slotRepository.reserveSlotAtomically(eq(slotId), any(Instant.class))).thenReturn(0);
         assertThatThrownBy(() -> mentorService.bookSlot(slotId, request, learnerId))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("already been booked");

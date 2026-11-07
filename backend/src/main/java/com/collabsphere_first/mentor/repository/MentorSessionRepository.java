@@ -13,3 +13,4 @@ public interface MentorSessionRepository extends JpaRepository<MentorSession, UU
     List<MentorSession> findByMentorIdOrderByStartsAtDesc(Long mentorId);
     List<MentorSession> findByLearnerIdOrderByStartsAtDesc(Long learnerId);
 }
+

@@ -25,3 +25,4 @@ public class CareerApplicationDto {
     private Instant createdAt;
     private Instant updatedAt;
 }
+

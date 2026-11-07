@@ -26,3 +26,4 @@ public class CareerJobDto {
     private Instant createdAt;
     private Instant updatedAt;
 }
+

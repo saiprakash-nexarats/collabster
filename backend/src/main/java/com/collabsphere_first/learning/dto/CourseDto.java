@@ -25,3 +25,4 @@ public class CourseDto {
     private Integer progress;
     private Instant createdAt;
 }
+

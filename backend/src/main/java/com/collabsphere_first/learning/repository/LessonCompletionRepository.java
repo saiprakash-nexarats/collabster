@@ -13,3 +13,4 @@ public interface LessonCompletionRepository extends JpaRepository<LessonCompleti
     long countByUserIdAndLessonIdIn(Long userId, List<UUID> lessonIds);
     List<LessonCompletion> findByUserIdAndLessonIdIn(Long userId, List<UUID> lessonIds);
 }
+

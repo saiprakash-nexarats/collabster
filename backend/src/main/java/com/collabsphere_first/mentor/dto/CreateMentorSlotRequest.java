@@ -18,3 +18,4 @@ public class CreateMentorSlotRequest {
 
     private Integer durationMinutes;
 }
+

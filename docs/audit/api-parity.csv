@@ -73,16 +73,16 @@ Messages,messages.endCall,POST,/v1/messages/calls/{callId}/end,/v1/messages/call
 Messages,messages.callHistory,GET,/v1/messages/calls/history,/v1/messages/calls/history,DEFERRED,TEST-MSG-019,Call logs deferred pending SFU/TURN relay infrastructure (returns 501)
 Messages,messages.markRead,POST,/v1/messages/conversations/{conversationId}/read,/v1/messages/conversations/{conversationId}/read,IMPLEMENTED_AND_TESTED,TEST-MSG-020,Conversation read receipt acknowledgment
 Messages,messages.downloadAttachment,GET,/v1/messages/conversations/{conversationId}/attachments/{objectId}/download,/v1/messages/conversations/{conversationId}/attachments/{objectId}/download,IMPLEMENTED_AND_TESTED,TEST-MSG-021,Attachment download signed URL
-Learning,learning.courses,GET,/v1/learning/courses,-,DEFERRED,SCHED-P5-001,Domain scheduled for Phase 5 implementation
-Learning,learning.lessons,GET,/v1/learning/courses/{id}/lessons,-,DEFERRED,SCHED-P5-002,Domain scheduled for Phase 5 implementation
-Learning,learning.createCourse,POST,/v1/learning/courses,-,DEFERRED,SCHED-P5-003,Domain scheduled for Phase 5 implementation
-Learning,learning.enroll,POST,/v1/learning/courses/{id}/enrollments,-,DEFERRED,SCHED-P5-004,Domain scheduled for Phase 5 implementation
-Learning,learning.addLesson,POST,/v1/learning/courses/{id}/lessons,-,DEFERRED,SCHED-P5-005,Domain scheduled for Phase 5 implementation
-Learning,learning.completeLesson,POST,/v1/learning/courses/{courseId}/lessons/{lessonId}/complete,-,DEFERRED,SCHED-P5-006,Domain scheduled for Phase 5 implementation
-Learning,learning.claimCertificate,POST,/v1/learning/courses/{courseId}/certificate,-,DEFERRED,SCHED-P5-007,Domain scheduled for Phase 5 implementation
-Learning,learning.myCertificates,GET,/v1/learning/certificates/my,-,DEFERRED,SCHED-P5-008,Domain scheduled for Phase 5 implementation
-Learning,learning.verifyCertificate,GET,/v1/learning/certificates/verify/{certificateNumber},-,DEFERRED,SCHED-P5-009,Domain scheduled for Phase 5 implementation
-Learning,learning.lessonExercise,GET,/v1/learning/courses/{courseId}/lessons/{lessonId}/exercise,-,DEFERRED,SCHED-P5-010,Domain scheduled for Phase 5 implementation
+Learning,learning.courses,GET,/v1/learning/courses,/v1/learning/courses,IMPLEMENTED_AND_TESTED,TEST-LRN-001,Published courses catalog with user enrollment state
+Learning,learning.lessons,GET,/v1/learning/courses/{id}/lessons,/v1/learning/courses/{id}/lessons,IMPLEMENTED_AND_TESTED,TEST-LRN-002,Ordered course lessons with student completion state
+Learning,learning.createCourse,POST,/v1/learning/courses,/v1/learning/courses,IMPLEMENTED_AND_TESTED,TEST-LRN-003,Instructor course creation
+Learning,learning.enroll,POST,/v1/learning/courses/{id}/enrollments,/v1/learning/courses/{id}/enrollments,IMPLEMENTED_AND_TESTED,TEST-LRN-004,Student course enrollment with duplicate protection
+Learning,learning.addLesson,POST,/v1/learning/courses/{id}/lessons,/v1/learning/courses/{id}/lessons,IMPLEMENTED_AND_TESTED,TEST-LRN-005,Instructor lesson creation with order indexing
+Learning,learning.completeLesson,POST,/v1/learning/courses/{courseId}/lessons/{lessonId}/complete,/v1/learning/courses/{courseId}/lessons/{lessonId}/complete,IMPLEMENTED_AND_TESTED,TEST-LRN-006,Lesson completion with progress calculation
+Learning,learning.claimCertificate,POST,/v1/learning/courses/{courseId}/certificate,/v1/learning/courses/{courseId}/certificate,IMPLEMENTED_AND_TESTED,TEST-LRN-007,Certificate claim with SHA-256 hash verification
+Learning,learning.myCertificates,GET,/v1/learning/certificates/my,/v1/learning/certificates/my,IMPLEMENTED_AND_TESTED,TEST-LRN-008,Student earned certificate listing
+Learning,learning.verifyCertificate,GET,/v1/learning/certificates/verify/{certificateNumber},/v1/learning/certificates/verify/{certificateNumber},IMPLEMENTED_AND_TESTED,TEST-LRN-009,Public certificate verification by certificate number
+Learning,learning.lessonExercise,GET,/v1/learning/courses/{courseId}/lessons/{lessonId}/exercise,/v1/learning/courses/{courseId}/lessons/{lessonId}/exercise,IMPLEMENTED_AND_TESTED,TEST-LRN-010,Interactive lesson prompt and starter code
 Projects,projects.list,GET,/v1/projects,/v1/projects,IMPLEMENTED_AND_TESTED,TEST-PROJ-001,User projects list with role and membership state
 Projects,projects.create,POST,/v1/projects,/v1/projects,IMPLEMENTED_AND_TESTED,TEST-PROJ-002,Project workspace creation with owner enrollment
 Projects,projects.invite,POST,/v1/projects/{id}/members,/v1/projects/{id}/members,IMPLEMENTED_AND_TESTED,TEST-PROJ-003,Collaborator invitation with manager permission check
@@ -114,22 +114,22 @@ Companies,companies.documents,GET,/v1/companies/{id}/documents,/v1/companies/{id
 Companies,companies.createDocument,POST,/v1/companies/{id}/documents,/v1/companies/{id}/documents,IMPLEMENTED_AND_TESTED,TEST-COMP-009,Document vault creation linking to verified storage_objects
 Companies,companies.downloadDocument,GET,/v1/companies/{id}/documents/{documentId}/download,/v1/companies/{id}/documents/{documentId}/download,IMPLEMENTED_AND_TESTED,TEST-COMP-010,Secure download ticket generation for document
 Companies,companies.archiveDocument,DELETE,/v1/companies/{id}/documents/{documentId},/v1/companies/{id}/documents/{documentId},IMPLEMENTED_AND_TESTED,TEST-COMP-011,Company document archival (soft-delete) with audit timestamps
-Mentors,mentors.list,GET,/v1/mentors,-,DEFERRED,SCHED-P5-042,Domain scheduled for Phase 5 implementation
-Mentors,mentors.sessions,GET,/v1/mentors/sessions,-,DEFERRED,SCHED-P5-043,Domain scheduled for Phase 5 implementation
-Mentors,mentors.upsertProfile,POST,/v1/mentors/profile,-,DEFERRED,SCHED-P5-044,Domain scheduled for Phase 5 implementation
-Mentors,mentors.requestSession,POST,/v1/mentors/{id}/sessions,-,DEFERRED,SCHED-P5-045,Domain scheduled for Phase 5 implementation
-Mentors,mentors.confirmSession,POST,/v1/mentors/sessions/{id}/confirm,-,DEFERRED,SCHED-P5-046,Domain scheduled for Phase 5 implementation
-Mentors,mentors.cancelSession,POST,/v1/mentors/sessions/{id}/cancel,-,DEFERRED,SCHED-P5-047,Domain scheduled for Phase 5 implementation
-Mentors,mentors.slots,GET,/v1/mentors/{id}/slots,-,DEFERRED,SCHED-P5-048,Domain scheduled for Phase 5 implementation
-Mentors,mentors.createSlot,POST,/v1/mentors/slots,-,DEFERRED,SCHED-P5-049,Domain scheduled for Phase 5 implementation
-Mentors,mentors.bookSlot,POST,/v1/mentors/slots/{slotId}/book,-,DEFERRED,SCHED-P5-050,Domain scheduled for Phase 5 implementation
-Career,career.jobs,GET,/v1/career/jobs,-,DEFERRED,SCHED-P5-051,Domain scheduled for Phase 5 implementation
-Career,career.applications,GET,/v1/career/applications,-,DEFERRED,SCHED-P5-052,Domain scheduled for Phase 5 implementation
-Career,career.createJob,POST,/v1/career/jobs,-,DEFERRED,SCHED-P5-053,Domain scheduled for Phase 5 implementation
-Career,career.apply,POST,/v1/career/jobs/{id}/applications,-,DEFERRED,SCHED-P5-054,Domain scheduled for Phase 5 implementation
-Career,career.withdraw,POST,/v1/career/applications/{id}/withdraw,-,DEFERRED,SCHED-P5-055,Domain scheduled for Phase 5 implementation
-Career,career.jobApplications,GET,/v1/career/jobs/{id}/applications,-,DEFERRED,SCHED-P5-056,Domain scheduled for Phase 5 implementation
-Career,career.reviewApplication,PATCH,/v1/career/jobs/{id}/applications/{appId}/review,-,DEFERRED,SCHED-P5-057,Domain scheduled for Phase 5 implementation
+Mentors,mentors.list,GET,/v1/mentors,/v1/mentors,IMPLEMENTED_AND_TESTED,TEST-MTR-001,Mentor profiles list with headline and hourly rate
+Mentors,mentors.sessions,GET,/v1/mentors/sessions,/v1/mentors/sessions,IMPLEMENTED_AND_TESTED,TEST-MTR-002,User mentor sessions as mentor and learner
+Mentors,mentors.upsertProfile,POST,/v1/mentors/profile,/v1/mentors/profile,IMPLEMENTED_AND_TESTED,TEST-MTR-003,Mentor profile creation and update
+Mentors,mentors.requestSession,POST,/v1/mentors/{id}/sessions,/v1/mentors/{id}/sessions,IMPLEMENTED_AND_TESTED,TEST-MTR-004,Request 1:1 mentoring session
+Mentors,mentors.confirmSession,POST,/v1/mentors/sessions/{id}/confirm,/v1/mentors/sessions/{id}/confirm,IMPLEMENTED_AND_TESTED,TEST-MTR-005,Mentor session confirmation with authorization check
+Mentors,mentors.cancelSession,POST,/v1/mentors/sessions/{id}/cancel,/v1/mentors/sessions/{id}/cancel,IMPLEMENTED_AND_TESTED,TEST-MTR-006,Session cancellation with slot release
+Mentors,mentors.slots,GET,/v1/mentors/{id}/slots,/v1/mentors/{id}/slots,IMPLEMENTED_AND_TESTED,TEST-MTR-007,Mentor availability slots list
+Mentors,mentors.createSlot,POST,/v1/mentors/slots,/v1/mentors/slots,IMPLEMENTED_AND_TESTED,TEST-MTR-008,Mentor creates availability slot
+Mentors,mentors.bookSlot,POST,/v1/mentors/slots/{slotId}/book,/v1/mentors/slots/{slotId}/book,IMPLEMENTED_AND_TESTED,TEST-MTR-009,Learner books slot with atomic race condition prevention
+Career,career.jobs,GET,/v1/career/jobs,/v1/career/jobs,IMPLEMENTED_AND_TESTED,TEST-CAR-001,Published job listings
+Career,career.applications,GET,/v1/career/applications,/v1/career/applications,IMPLEMENTED_AND_TESTED,TEST-CAR-002,Applicant job application list
+Career,career.createJob,POST,/v1/career/jobs,/v1/career/jobs,IMPLEMENTED_AND_TESTED,TEST-CAR-003,Employer job posting
+Career,career.apply,POST,/v1/career/jobs/{id}/applications,/v1/career/jobs/{id}/applications,IMPLEMENTED_AND_TESTED,TEST-CAR-004,Apply for job with resume attachment validation and duplicate prevention
+Career,career.withdraw,POST,/v1/career/applications/{id}/withdraw,/v1/career/applications/{id}/withdraw,IMPLEMENTED_AND_TESTED,TEST-CAR-005,Applicant withdraws application
+Career,career.jobApplications,GET,/v1/career/jobs/{id}/applications,/v1/career/jobs/{id}/applications,IMPLEMENTED_AND_TESTED,TEST-CAR-006,Employer lists applications for job
+Career,career.reviewApplication,PATCH,/v1/career/jobs/{id}/applications/{appId}/review,/v1/career/jobs/{id}/applications/{appId}/review,IMPLEMENTED_AND_TESTED,TEST-CAR-007,Employer reviews application state
 Storage,storage.requestUpload,POST,/v1/storage/uploads,StorageController.java,IMPLEMENTED_AND_TESTED,-,Verified upload session initiation with signed URLs and metadata persistence
 Storage,storage.completeUpload,POST,/v1/storage/uploads/{id}/complete,StorageController.java,IMPLEMENTED_AND_TESTED,-,Verified upload completion with backend file verification and idempotency
 Storage,storage.putFile,PUT,externalUploadUrl,StorageController.java,IMPLEMENTED_AND_TESTED,-,Direct upload to signed ticket URL verified with HMAC validation

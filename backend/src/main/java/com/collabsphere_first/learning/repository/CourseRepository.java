@@ -12,3 +12,4 @@ public interface CourseRepository extends JpaRepository<Course, UUID> {
     List<Course> findByStateOrderByCreatedAtDesc(String state);
     List<Course> findByInstructorIdOrderByCreatedAtDesc(Long instructorId);
 }
+

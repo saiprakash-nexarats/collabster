@@ -21,3 +21,4 @@ public class CourseCertificateDto {
     private String verificationHash;
     private Instant issuedAt;
 }
+

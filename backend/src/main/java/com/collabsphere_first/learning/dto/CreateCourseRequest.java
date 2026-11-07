@@ -19,3 +19,4 @@ public class CreateCourseRequest {
     private String difficulty;
     private String category;
 }
+

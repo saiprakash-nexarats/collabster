@@ -14,3 +14,4 @@ public interface CourseCertificateRepository extends JpaRepository<CourseCertifi
     Optional<CourseCertificate> findByCourseIdAndUserId(UUID courseId, Long userId);
     List<CourseCertificate> findByUserIdOrderByIssuedAtDesc(Long userId);
 }
+

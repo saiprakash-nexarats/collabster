@@ -13,3 +13,4 @@ public interface MentorProfileRepository extends JpaRepository<MentorProfile, UU
     Optional<MentorProfile> findByUserId(Long userId);
     List<MentorProfile> findByStateOrderByCreatedAtDesc(String state);
 }
+
