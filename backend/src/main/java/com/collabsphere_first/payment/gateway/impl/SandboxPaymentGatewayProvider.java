@@ -1,6 +1,7 @@
 package com.collabsphere_first.payment.gateway.impl;
 
 import com.collabsphere_first.payment.gateway.PaymentGatewayProvider;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -20,11 +21,52 @@ public class SandboxPaymentGatewayProvider implements PaymentGatewayProvider {
 
     private static final String PROVIDER_NAME = "SANDBOX";
     private final String webhookSecret;
-    private final ConcurrentMap<String, GatewayReconciliationResult> knownOrders = new ConcurrentHashMap<>();
+    private final String configuredProvider;
+    private final String activeProfile;
+
+    public record SandboxOrderRecord(
+            String gatewayOrderId,
+            long amountCents,
+            String currency,
+            String orderNumber,
+            String status,
+            String authorizedPaymentId
+    ) {}
+
+    public record SandboxPaymentRecord(
+            String gatewayPaymentId,
+            String gatewayOrderId,
+            long amountCents,
+            String currency,
+            String status
+    ) {}
+
+    private final ConcurrentMap<String, SandboxOrderRecord> knownOrders = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, SandboxPaymentRecord> knownPayments = new ConcurrentHashMap<>();
 
     public SandboxPaymentGatewayProvider(
-            @Value("${collobster.payment.sandbox.webhook-secret:collobster_sandbox_webhook_secret_key_2026_test}") String webhookSecret) {
+            @Value("${collobster.payment.sandbox.webhook-secret:collobster_sandbox_webhook_secret_key_2026_test}") String webhookSecret,
+            @Value("${collobster.payment.gateway.provider:SANDBOX}") String configuredProvider,
+            @Value("${spring.profiles.active:test}") String activeProfile) {
         this.webhookSecret = webhookSecret;
+        this.configuredProvider = configuredProvider;
+        this.activeProfile = activeProfile;
+    }
+
+    @PostConstruct
+    public void validateConfiguration() {
+        if ("production".equalsIgnoreCase(activeProfile) || "prod".equalsIgnoreCase(activeProfile)) {
+            if ("SANDBOX".equalsIgnoreCase(configuredProvider)) {
+                log.error("[SECURITY] Sandbox payment gateway is not permitted in production mode without explicit configuration!");
+                throw new IllegalStateException("Production environment detected: Live payment provider configuration required. Sandbox cannot be used as default live payment processor.");
+            }
+            if (webhookSecret == null || webhookSecret.contains("collobster_sandbox_webhook_secret_key")) {
+                throw new IllegalStateException("Production environment cannot use default or test webhook secrets.");
+            }
+        }
+        if (webhookSecret == null || webhookSecret.isBlank()) {
+            throw new IllegalStateException("Payment gateway webhook secret must be configured");
+        }
     }
 
     @Override
@@ -35,37 +77,58 @@ public class SandboxPaymentGatewayProvider implements PaymentGatewayProvider {
     @Override
     public GatewayOrderResult createOrder(long amountCents, String currency, String orderNumber, String description) {
         String gatewayOrderId = "sandbox_ord_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
-        knownOrders.put(gatewayOrderId, new GatewayReconciliationResult(true, "created", amountCents, currency));
-        log.info("[SANDBOX GATEWAY] Created order {} for amount {} {}", gatewayOrderId, amountCents, currency);
+        String authorizedPaymentId = "sandbox_pay_" + gatewayOrderId.substring("sandbox_ord_".length());
+
+        SandboxOrderRecord orderRecord = new SandboxOrderRecord(gatewayOrderId, amountCents, currency, orderNumber, "created", authorizedPaymentId);
+        knownOrders.put(gatewayOrderId, orderRecord);
+
+        // Pre-register authorized transaction for this isolated sandbox order
+        SandboxPaymentRecord paymentRecord = new SandboxPaymentRecord(authorizedPaymentId, gatewayOrderId, amountCents, currency, "captured");
+        knownPayments.put(authorizedPaymentId, paymentRecord);
+
+        log.info("[SANDBOX GATEWAY] Created order {} (auth payment {}) for amount {} {}", gatewayOrderId, authorizedPaymentId, amountCents, currency);
         return new GatewayOrderResult(gatewayOrderId, "created");
+    }
+
+    public void registerTestPayment(String gatewayPaymentId, String gatewayOrderId, long amountCents, String currency, String status) {
+        knownPayments.put(gatewayPaymentId, new SandboxPaymentRecord(gatewayPaymentId, gatewayOrderId, amountCents, currency, status));
     }
 
     @Override
     public GatewayVerificationResult verifyPayment(String gatewayPaymentId, String gatewayOrderId) {
         if (gatewayPaymentId == null || gatewayPaymentId.isBlank()) {
-            return new GatewayVerificationResult(false, null, "failed", 0L, "INR");
+            log.warn("[SANDBOX GATEWAY] Payment verification rejected: missing payment id");
+            return new GatewayVerificationResult(false, null, "missing_payment_id", 0L, "INR");
         }
 
-        // Must match sandbox convention or pay_ format
-        boolean formatValid = gatewayPaymentId.startsWith("sandbox_pay_")
-                || gatewayPaymentId.startsWith("pay_")
-                || gatewayPaymentId.startsWith("CL-");
-
-        if (!formatValid) {
-            log.warn("[SANDBOX GATEWAY] Rejected invalid payment id: {}", gatewayPaymentId);
-            return new GatewayVerificationResult(false, gatewayPaymentId, "invalid_payment_id", 0L, "INR");
+        if (gatewayOrderId == null || gatewayOrderId.isBlank()) {
+            log.warn("[SANDBOX GATEWAY] Payment verification rejected: missing order id");
+            return new GatewayVerificationResult(false, gatewayPaymentId, "missing_order_id", 0L, "INR");
         }
 
-        GatewayReconciliationResult known = gatewayOrderId != null ? knownOrders.get(gatewayOrderId) : null;
-        long amount = known != null ? known.amountCents() : 0L;
-        String currency = known != null ? known.currency() : "INR";
-
-        if (known != null) {
-            knownOrders.put(gatewayOrderId, new GatewayReconciliationResult(true, "paid", amount, currency));
+        SandboxPaymentRecord payment = knownPayments.get(gatewayPaymentId.trim());
+        if (payment == null) {
+            log.warn("[SANDBOX GATEWAY] Rejected unknown transaction: {}", gatewayPaymentId);
+            return new GatewayVerificationResult(false, gatewayPaymentId, "unknown_transaction", 0L, "INR");
         }
 
-        log.info("[SANDBOX GATEWAY] Verified payment {} for order {}", gatewayPaymentId, gatewayOrderId);
-        return new GatewayVerificationResult(true, gatewayPaymentId, "paid", amount, currency);
+        if (!gatewayOrderId.equals(payment.gatewayOrderId())) {
+            log.warn("[SANDBOX GATEWAY] Payment {} does not belong to order {}. Belongs to {}", gatewayPaymentId, gatewayOrderId, payment.gatewayOrderId());
+            return new GatewayVerificationResult(false, gatewayPaymentId, "order_mismatch", 0L, "INR");
+        }
+
+        if (!"captured".equalsIgnoreCase(payment.status()) && !"paid".equalsIgnoreCase(payment.status())) {
+            log.warn("[SANDBOX GATEWAY] Payment {} status is '{}', not captured/paid", gatewayPaymentId, payment.status());
+            return new GatewayVerificationResult(false, gatewayPaymentId, payment.status(), payment.amountCents(), payment.currency());
+        }
+
+        SandboxOrderRecord order = knownOrders.get(gatewayOrderId);
+        if (order != null) {
+            knownOrders.put(gatewayOrderId, new SandboxOrderRecord(order.gatewayOrderId(), order.amountCents(), order.currency(), order.orderNumber(), "paid", gatewayPaymentId));
+        }
+
+        log.info("[SANDBOX GATEWAY] Verified payment {} for order {} (amount {} {})", gatewayPaymentId, gatewayOrderId, payment.amountCents(), payment.currency());
+        return new GatewayVerificationResult(true, gatewayPaymentId, "paid", payment.amountCents(), payment.currency());
     }
 
     @Override
@@ -94,22 +157,26 @@ public class SandboxPaymentGatewayProvider implements PaymentGatewayProvider {
 
     @Override
     public GatewayPayoutResult processPayout(long amountCents, String currency, String destinationReference) {
+        if (amountCents <= 0) {
+            return new GatewayPayoutResult(false, null, "failed");
+        }
+        if (destinationReference == null || destinationReference.isBlank()) {
+            return new GatewayPayoutResult(false, null, "failed");
+        }
         String gatewayPayoutId = "sandbox_pout_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
-        log.info("[SANDBOX GATEWAY] Processed payout {} for {} {} to {}", gatewayPayoutId, amountCents, currency, destinationReference);
+        log.info("[SANDBOX GATEWAY] Processed sandbox payout {} for {} {} to {}", gatewayPayoutId, amountCents, currency, destinationReference);
         return new GatewayPayoutResult(true, gatewayPayoutId, "completed");
     }
 
     @Override
     public GatewayReconciliationResult reconcile(String gatewayOrderId) {
-        if (gatewayOrderId == null) {
+        if (gatewayOrderId == null || gatewayOrderId.isBlank()) {
             return new GatewayReconciliationResult(false, "not_found", 0L, "INR");
         }
-        GatewayReconciliationResult known = knownOrders.get(gatewayOrderId);
-        if (known != null) {
-            return known;
+        SandboxOrderRecord order = knownOrders.get(gatewayOrderId.trim());
+        if (order == null) {
+            return new GatewayReconciliationResult(false, "not_found", 0L, "INR");
         }
-        // Fallback for mock sandbox order
-        return new GatewayReconciliationResult(true, "paid", 0L, "INR");
+        return new GatewayReconciliationResult(true, order.status(), order.amountCents(), order.currency());
     }
 }
-

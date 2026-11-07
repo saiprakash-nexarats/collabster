@@ -19,6 +19,7 @@ public class PayoutRequestDto {
     private String destinationReference;
     private String status;
     private String gatewayPayoutId;
+    private String idempotencyKey;
     private String notes;
     private Instant processedAt;
     @Builder.Default

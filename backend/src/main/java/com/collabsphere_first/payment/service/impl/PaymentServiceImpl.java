@@ -7,6 +7,7 @@ import com.collabsphere_first.payment.repository.*;
 import com.collabsphere_first.payment.service.PaymentService;
 import com.collabsphere_first.services.entity.ServiceBooking;
 import com.collabsphere_first.services.repository.ServiceBookingRepository;
+import com.collabsphere_first.user.repository.UserRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -16,11 +17,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.List;
-import java.util.Locale;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -28,12 +27,15 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class PaymentServiceImpl implements PaymentService {
 
+    private static final Set<String> SUPPORTED_CURRENCIES = Set.of("INR", "USD", "EUR", "GBP");
+
     private final PaymentOrderRepository paymentOrderRepository;
     private final PaymentTransactionRepository paymentTransactionRepository;
     private final PaymentWebhookEventRepository paymentWebhookEventRepository;
     private final PayoutRequestRepository payoutRequestRepository;
     private final FinancialLedgerRepository financialLedgerRepository;
     private final ServiceBookingRepository serviceBookingRepository;
+    private final UserRepository userRepository;
     private final PaymentGatewayProvider gatewayProvider;
     private final ObjectMapper objectMapper;
 
@@ -44,17 +46,12 @@ public class PaymentServiceImpl implements PaymentService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Payment amount must be greater than zero");
         }
 
-        // Idempotency key protection
-        if (request.getIdempotencyKey() != null && !request.getIdempotencyKey().isBlank()) {
-            var existing = paymentOrderRepository.findByIdempotencyKey(request.getIdempotencyKey().trim());
-            if (existing.isPresent()) {
-                log.info("Returning existing order for idempotency key {}", request.getIdempotencyKey());
-                return mapToOrderDto(existing.get());
-            }
+        String currency = request.getCurrency() != null ? request.getCurrency().toUpperCase(Locale.ROOT) : "INR";
+        if (!SUPPORTED_CURRENCIES.contains(currency)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported payment currency: " + currency);
         }
 
         long authoritativeAmount = request.getAmountCents();
-        String currency = request.getCurrency() != null ? request.getCurrency().toUpperCase(Locale.ROOT) : "INR";
 
         // If booking is attached, enforce server-calculated booking price
         if (request.getBookingId() != null) {
@@ -65,11 +62,43 @@ public class PaymentServiceImpl implements PaymentService {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You are not authorized to create payments for this booking");
             }
 
+            String bookingStatus = booking.getStatus() != null ? booking.getStatus().toLowerCase(Locale.ROOT) : "requested";
+            if (List.of("cancelled", "rejected", "expired").contains(bookingStatus)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot create payment for booking in state '" + booking.getStatus() + "'");
+            }
+            if ("completed".equalsIgnoreCase(bookingStatus)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Booking is already completed");
+            }
+
             if (booking.getAmountCents() > 0) {
                 authoritativeAmount = booking.getAmountCents();
             }
             if (booking.getCurrency() != null) {
                 currency = booking.getCurrency().toUpperCase(Locale.ROOT);
+            }
+        }
+
+        // Idempotency key protection scoped to user and payload
+        if (request.getIdempotencyKey() != null && !request.getIdempotencyKey().isBlank()) {
+            String key = request.getIdempotencyKey().trim();
+            Optional<PaymentOrder> existing = paymentOrderRepository.findByIdempotencyKey(key);
+            if (existing.isPresent()) {
+                PaymentOrder existingOrder = existing.get();
+                if (!existingOrder.getUserId().equals(userId)) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Idempotency key collision across user boundary");
+                }
+
+                boolean amountMatches = existingOrder.getAmountCents().equals(authoritativeAmount);
+                boolean currencyMatches = existingOrder.getCurrency().equalsIgnoreCase(currency);
+                boolean bookingMatches = (existingOrder.getBookingId() == null && request.getBookingId() == null)
+                        || (existingOrder.getBookingId() != null && existingOrder.getBookingId().equals(request.getBookingId()));
+
+                if (!amountMatches || !currencyMatches || !bookingMatches) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Idempotency key reused with mismatched request parameters");
+                }
+
+                log.info("Returning existing order {} for idempotency key {}", existingOrder.getOrderNumber(), key);
+                return mapToOrderDto(existingOrder);
             }
         }
 
@@ -92,7 +121,8 @@ public class PaymentServiceImpl implements PaymentService {
                 .gatewayOrderId(gatewayResult.gatewayOrderId())
                 .build();
 
-        PaymentOrder saved = paymentOrderRepository.save(order);
+        PaymentOrder savedOrder = paymentOrderRepository.save(order);
+        final PaymentOrder saved = savedOrder != null ? savedOrder : order;
 
         if (request.getBookingId() != null) {
             serviceBookingRepository.findById(request.getBookingId()).ifPresent(b -> {
@@ -115,22 +145,22 @@ public class PaymentServiceImpl implements PaymentService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You are not authorized to confirm this payment order");
         }
 
-        if ("paid".equalsIgnoreCase(order.getStatus())) {
-            log.info("Payment order {} is already paid (idempotent confirmation)", orderId);
-            return mapToOrderDto(order);
-        }
-
-        if ("cancelled".equalsIgnoreCase(order.getStatus()) || "failed".equalsIgnoreCase(order.getStatus())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Payment order is in terminal state '" + order.getStatus() + "' and cannot be paid");
-        }
-
-        String paymentId = request.getGatewayPaymentId();
+        String paymentId = request != null ? request.getGatewayPaymentId() : null;
         if (paymentId == null || paymentId.isBlank()) {
-            paymentId = "sandbox_pay_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Missing required gateway payment identifier");
+        }
+
+        // Idempotency check: If already paid with this payment id, return immediately
+        if ("paid".equalsIgnoreCase(order.getStatus())) {
+            if (paymentId.trim().equals(order.getGatewayPaymentId()) || order.getGatewayPaymentId() == null) {
+                log.info("Payment order {} is already paid with reference {} (idempotent confirmation)", orderId, paymentId);
+                return mapToOrderDto(order);
+            }
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Payment order is already paid with a different payment reference");
         }
 
         // Authoritative verification with gateway provider
-        var verification = gatewayProvider.verifyPayment(paymentId, order.getGatewayOrderId());
+        var verification = gatewayProvider.verifyPayment(paymentId.trim(), order.getGatewayOrderId());
         if (!verification.verified()) {
             order.setStatus("failed");
             paymentOrderRepository.save(order);
@@ -141,31 +171,79 @@ public class PaymentServiceImpl implements PaymentService {
                     .amountCents(order.getAmountCents())
                     .currency(order.getCurrency())
                     .gatewayProvider(gatewayProvider.getProviderName())
-                    .gatewayTransactionId(paymentId)
+                    .gatewayTransactionId(paymentId.trim())
                     .status("FAILED")
                     .rawResponse("Verification failed: " + verification.status())
                     .build());
 
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Payment verification failed with provider");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Payment verification failed with provider: " + verification.status());
         }
 
-        order.setStatus("paid");
-        order.setGatewayPaymentId(paymentId);
-        order.setPaidAt(Instant.now());
-        PaymentOrder updated = paymentOrderRepository.save(order);
+        // Shared settlement engine handles order transition, duplicate payment-ID check, and ledger posting
+        return settlePaymentOrder(order, paymentId.trim(), verification.amountCents(), verification.currency(), "Client Checkout Confirmation");
+    }
 
+    @Transactional
+    public PaymentOrderDto settlePaymentOrder(
+            PaymentOrder order,
+            String gatewayPaymentId,
+            long verifiedAmountCents,
+            String verifiedCurrency,
+            String settlementSource) {
+
+        // 1. Idempotency check: Already paid with same gateway payment ID
+        if ("paid".equalsIgnoreCase(order.getStatus())) {
+            if (gatewayPaymentId != null && gatewayPaymentId.equals(order.getGatewayPaymentId())) {
+                log.info("Payment order {} is already paid with reference {} (idempotent settlement)", order.getId(), gatewayPaymentId);
+                return mapToOrderDto(order);
+            }
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Payment order is already paid with a different payment reference");
+        }
+
+        // 2. Reject terminal invalid states
+        if ("cancelled".equalsIgnoreCase(order.getStatus()) || "refunded".equalsIgnoreCase(order.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Payment order is in terminal state '" + order.getStatus() + "' and cannot be settled");
+        }
+
+        // 3. Amount and currency comparison
+        if (verifiedAmountCents != order.getAmountCents()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Verified payment amount (" + verifiedAmountCents + " cents) does not match order amount (" + order.getAmountCents() + " cents)");
+        }
+        if (!verifiedCurrency.equalsIgnoreCase(order.getCurrency())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Verified payment currency (" + verifiedCurrency + ") does not match order currency (" + order.getCurrency() + ")");
+        }
+
+        // 4. Unique gateway payment reference check
+        if (gatewayPaymentId != null && !gatewayPaymentId.isBlank()) {
+            Optional<PaymentOrder> existingWithPayment = paymentOrderRepository.findByGatewayPaymentIdAndStatus(gatewayPaymentId, "paid");
+            if (existingWithPayment.isPresent() && !existingWithPayment.get().getId().equals(order.getId())) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Gateway payment identifier " + gatewayPaymentId + " has already been applied to order " + existingWithPayment.get().getOrderNumber());
+            }
+        }
+
+        // 5. Update order state
+        order.setStatus("paid");
+        order.setGatewayPaymentId(gatewayPaymentId);
+        order.setPaidAt(Instant.now());
+        PaymentOrder savedOrder = paymentOrderRepository.save(order);
+        final PaymentOrder saved = savedOrder != null ? savedOrder : order;
+
+        // 6. Record success transaction
         paymentTransactionRepository.save(PaymentTransaction.builder()
-                .orderId(orderId)
+                .orderId(order.getId())
                 .transactionType("PAYMENT")
                 .amountCents(order.getAmountCents())
                 .currency(order.getCurrency())
-                .gatewayProvider(gatewayProvider.getProviderName())
-                .gatewayTransactionId(paymentId)
+                .gatewayProvider(order.getGatewayProvider() != null ? order.getGatewayProvider() : gatewayProvider.getProviderName())
+                .gatewayTransactionId(gatewayPaymentId)
                 .status("SUCCESS")
-                .rawResponse("Verified and paid")
+                .rawResponse(settlementSource)
                 .build());
 
-        // Update linked service booking status
+        // 7. Settle linked booking & credit provider escrow ledger
         if (order.getBookingId() != null) {
             serviceBookingRepository.findById(order.getBookingId()).ifPresent(b -> {
                 b.setStatus("confirmed");
@@ -187,40 +265,54 @@ public class PaymentServiceImpl implements PaymentService {
             });
         }
 
-        log.info("Payment order {} confirmed as PAID via {}", orderId, paymentId);
-        return mapToOrderDto(updated);
+        log.info("Payment order {} confirmed as PAID via {} ({})", order.getId(), gatewayPaymentId, settlementSource);
+        return mapToOrderDto(saved);
     }
 
     @Override
     @Transactional
     public WebhookResponse processWebhook(String rawPayload, String signature) {
+        // Raw-body signature verification (do NOT log sensitive signature)
         if (!gatewayProvider.verifyWebhookSignature(rawPayload, signature)) {
-            log.warn("Invalid webhook signature rejected");
+            log.warn("Invalid payment webhook signature rejected");
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid webhook signature");
         }
 
-        String eventId = null;
-        String eventType = "payment.updated";
-        String gatewayOrderId = null;
-        String gatewayPaymentId = null;
+        String eventId;
+        String eventType;
+        String gatewayOrderId;
+        String gatewayPaymentId;
+        Long payloadAmountCents = null;
+        String payloadCurrency = null;
 
         try {
             JsonNode root = objectMapper.readTree(rawPayload);
             eventId = root.path("id").asText(null);
-            eventType = root.path("event").asText(root.path("eventType").asText("payment.updated"));
+            eventType = root.path("event").asText(root.path("eventType").asText("payment.captured"));
+
             JsonNode payloadObj = root.path("payload").path("payment").path("entity");
             if (payloadObj.isMissingNode()) {
                 payloadObj = root;
             }
             gatewayOrderId = payloadObj.path("order_id").asText(null);
             gatewayPaymentId = payloadObj.path("id").asText(null);
+
+            if (payloadObj.has("amount")) {
+                payloadAmountCents = payloadObj.path("amount").asLong();
+            } else if (payloadObj.has("amount_cents")) {
+                payloadAmountCents = payloadObj.path("amount_cents").asLong();
+            }
+
+            if (payloadObj.has("currency")) {
+                payloadCurrency = payloadObj.path("currency").asText("INR");
+            }
         } catch (Exception e) {
-            log.error("Failed to parse webhook JSON payload: {}", e.getMessage());
+            log.error("Failed to parse webhook JSON payload");
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Malformed webhook JSON payload");
         }
 
         if (eventId == null || eventId.isBlank()) {
-            eventId = "evt_" + UUID.nameUUIDFromBytes(rawPayload.getBytes()).toString().replace("-", "");
+            eventId = "evt_" + UUID.nameUUIDFromBytes(rawPayload.getBytes(StandardCharsets.UTF_8)).toString().replace("-", "");
         }
 
         // Webhook Deduplication / Replay Prevention
@@ -238,25 +330,38 @@ public class PaymentServiceImpl implements PaymentService {
                 .provider(gatewayProvider.getProviderName())
                 .eventType(eventType)
                 .payload(rawPayload)
-                .signature(signature)
+                .signature(null) // Omit raw signature from storage and logs
                 .processed(false)
                 .build();
         paymentWebhookEventRepository.save(webhookEvent);
 
-        // Process payment capture if matching order exists
-        if (gatewayOrderId != null) {
-            Optional<PaymentOrder> orderOpt = paymentOrderRepository.findByGatewayOrderId(gatewayOrderId);
-            if (orderOpt.isPresent()) {
-                PaymentOrder order = orderOpt.get();
-                if (!"paid".equalsIgnoreCase(order.getStatus())) {
-                    order.setStatus("paid");
-                    order.setGatewayPaymentId(gatewayPaymentId);
-                    order.setPaidAt(Instant.now());
-                    paymentOrderRepository.save(order);
-                    log.info("Webhook {} updated order {} to PAID", eventId, order.getId());
-                }
-            }
+        // Explicit supported event types
+        List<String> supportedCaptureEvents = List.of("payment.captured", "payment.authorized", "order.paid");
+        if (!supportedCaptureEvents.contains(eventType.toLowerCase(Locale.ROOT))) {
+            log.info("Ignoring non-capture webhook event type: {}", eventType);
+            webhookEvent.setProcessed(true);
+            webhookEvent.setProcessedAt(Instant.now());
+            paymentWebhookEventRepository.save(webhookEvent);
+            return WebhookResponse.builder()
+                    .status("ignored")
+                    .eventId(eventId)
+                    .processed(true)
+                    .build();
         }
+
+        if (gatewayOrderId == null || gatewayOrderId.isBlank()) {
+            log.warn("Webhook event {} has no order_id", eventId);
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Webhook payload missing order_id");
+        }
+
+        PaymentOrder order = paymentOrderRepository.findByGatewayOrderId(gatewayOrderId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No payment order found for gateway order: " + gatewayOrderId));
+
+        long amountToVerify = payloadAmountCents != null ? payloadAmountCents : order.getAmountCents();
+        String currencyToVerify = payloadCurrency != null ? payloadCurrency : order.getCurrency();
+
+        // Process through shared payment-settlement engine
+        settlePaymentOrder(order, gatewayPaymentId, amountToVerify, currencyToVerify, "Webhook Event " + eventId);
 
         webhookEvent.setProcessed(true);
         webhookEvent.setProcessedAt(Instant.now());
@@ -314,42 +419,91 @@ public class PaymentServiceImpl implements PaymentService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Destination account reference is required");
         }
 
-        long availableBalance = financialLedgerRepository.calculateUserBalanceCents(providerId);
+        String currency = request.getCurrency() != null ? request.getCurrency().toUpperCase(Locale.ROOT) : "INR";
+        if (!SUPPORTED_CURRENCIES.contains(currency)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported payout currency: " + currency);
+        }
+
+        // PESSIMISTIC LOCK: Lock provider row in PostgreSQL to serialize concurrent payout requests
+        userRepository.findByIdForUpdate(providerId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Provider user not found: " + providerId));
+
+        // Idempotency check under lock
+        if (request.getIdempotencyKey() != null && !request.getIdempotencyKey().isBlank()) {
+            String key = request.getIdempotencyKey().trim();
+            Optional<PayoutRequest> existingOpt = payoutRequestRepository.findByIdempotencyKey(key);
+            if (existingOpt.isPresent()) {
+                PayoutRequest existing = existingOpt.get();
+                if (!existing.getProviderId().equals(providerId)) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Idempotency key collision across user boundary");
+                }
+                if (!existing.getAmountCents().equals(request.getAmountCents())
+                        || !existing.getDestinationReference().equalsIgnoreCase(request.getDestinationReference().trim())) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Idempotency key reused with different payout parameters");
+                }
+                return mapToPayoutDto(existing);
+            }
+        }
+
+        long settledBalance = financialLedgerRepository.calculateUserBalanceCents(providerId);
+        long pendingReservations = payoutRequestRepository.calculatePendingReservations(providerId);
+        long availableBalance = settledBalance - pendingReservations;
+
         if (request.getAmountCents() > availableBalance) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Insufficient eligible balance for payout. Available: " + availableBalance + " cents, Requested: " + request.getAmountCents() + " cents");
         }
 
-        String currency = request.getCurrency() != null ? request.getCurrency().toUpperCase(Locale.ROOT) : "INR";
-        var gatewayResult = gatewayProvider.processPayout(request.getAmountCents(), currency, request.getDestinationReference().trim());
-
+        // Create PayoutRequest in PENDING status (reserves funds)
         PayoutRequest payout = PayoutRequest.builder()
                 .providerId(providerId)
                 .amountCents(request.getAmountCents())
                 .currency(currency)
                 .method(request.getMethod() != null ? request.getMethod() : "bank_account")
                 .destinationReference(request.getDestinationReference().trim())
-                .status("completed")
-                .gatewayPayoutId(gatewayResult.gatewayPayoutId())
+                .status("pending")
+                .idempotencyKey(request.getIdempotencyKey() != null && !request.getIdempotencyKey().isBlank() ? request.getIdempotencyKey().trim() : null)
                 .notes(request.getNotes())
-                .processedAt(Instant.now())
                 .build();
+        PayoutRequest savedPayout = payoutRequestRepository.save(payout);
+        PayoutRequest saved = savedPayout != null ? savedPayout : payout;
 
-        PayoutRequest saved = payoutRequestRepository.save(payout);
+        // Process with gateway
+        var gatewayResult = gatewayProvider.processPayout(request.getAmountCents(), currency, request.getDestinationReference().trim());
 
-        // Deduct from ledger
-        financialLedgerRepository.save(FinancialLedgerEntry.builder()
-                .userId(providerId)
-                .entryType("PAYOUT_DEBIT")
-                .amountCents(request.getAmountCents())
-                .currency(currency)
-                .balanceAfterCents(availableBalance - request.getAmountCents())
-                .referenceType("PAYOUT_REQUEST")
-                .referenceId(saved.getId())
-                .description("Payout to " + request.getDestinationReference())
-                .build());
+        if (gatewayResult.success() && "completed".equalsIgnoreCase(gatewayResult.status())) {
+            saved.setStatus("completed");
+            saved.setGatewayPayoutId(gatewayResult.gatewayPayoutId());
+            saved.setProcessedAt(Instant.now());
+            payoutRequestRepository.save(saved);
 
-        log.info("Completed payout request {} for provider {} for amount {} {}", saved.getId(), providerId, request.getAmountCents(), currency);
+            // Settle debit in ledger
+            financialLedgerRepository.save(FinancialLedgerEntry.builder()
+                    .userId(providerId)
+                    .entryType("PAYOUT_DEBIT")
+                    .amountCents(request.getAmountCents())
+                    .currency(currency)
+                    .balanceAfterCents(settledBalance - request.getAmountCents())
+                    .referenceType("PAYOUT_REQUEST")
+                    .referenceId(saved.getId())
+                    .description("Payout withdrawal to " + request.getDestinationReference().trim())
+                    .build());
+
+            log.info("Completed payout request {} for provider {} for amount {} {}", saved.getId(), providerId, request.getAmountCents(), currency);
+        } else if ("failed".equalsIgnoreCase(gatewayResult.status())) {
+            saved.setStatus("failed");
+            saved.setProcessedAt(Instant.now());
+            payoutRequestRepository.save(saved);
+            log.warn("Gateway rejected payout request {}: {}", saved.getId(), gatewayResult.status());
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Gateway rejected payout processing");
+        } else {
+            // Processing
+            saved.setStatus("processing");
+            saved.setGatewayPayoutId(gatewayResult.gatewayPayoutId());
+            payoutRequestRepository.save(saved);
+            log.info("Payout request {} is processing asynchronously", saved.getId());
+        }
+
         return mapToPayoutDto(saved);
     }
 
@@ -391,6 +545,7 @@ public class PaymentServiceImpl implements PaymentService {
                 .destinationReference(p.getDestinationReference())
                 .status(p.getStatus())
                 .gatewayPayoutId(p.getGatewayPayoutId())
+                .idempotencyKey(p.getIdempotencyKey())
                 .notes(p.getNotes())
                 .processedAt(p.getProcessedAt())
                 .remote(true)

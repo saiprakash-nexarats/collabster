@@ -31,6 +31,8 @@ public interface ServiceBookingRepository extends JpaRepository<ServiceBooking, 
 
     boolean existsByServiceIdAndCustomerIdAndStatus(UUID serviceId, Long customerId, String status);
 
+    boolean existsByServiceIdAndCustomerIdAndStatusIn(UUID serviceId, Long customerId, Collection<String> statuses);
+
     @Modifying
     @Query("UPDATE ServiceBooking b SET b.status = :newStatus, b.updatedAt = :now WHERE b.id = :bookingId AND b.status = :expectedStatus")
     int updateStatusAtomically(@Param("bookingId") UUID bookingId, @Param("expectedStatus") String expectedStatus, @Param("newStatus") String newStatus, @Param("now") Instant now);

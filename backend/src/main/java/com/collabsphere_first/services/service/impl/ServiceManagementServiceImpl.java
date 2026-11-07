@@ -11,6 +11,7 @@ import com.collabsphere_first.services.service.ServiceManagementService;
 import com.collabsphere_first.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +22,7 @@ import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -28,6 +30,8 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class ServiceManagementServiceImpl implements ServiceManagementService {
+
+    private static final Set<String> SUPPORTED_CURRENCIES = Set.of("INR", "USD", "EUR", "GBP");
 
     private final ServiceListingRepository listingRepository;
     private final ServiceBookingRepository bookingRepository;
@@ -130,6 +134,11 @@ public class ServiceManagementServiceImpl implements ServiceManagementService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Providers cannot book their own services");
         }
 
+        String currency = listing.getCurrency() != null ? listing.getCurrency().toUpperCase(Locale.ROOT) : "INR";
+        if (!SUPPORTED_CURRENCIES.contains(currency)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported service currency: " + currency);
+        }
+
         if (request.getStartsAt() != null) {
             if (request.getStartsAt().isBefore(Instant.now())) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot book appointments in the past");
@@ -145,9 +154,15 @@ public class ServiceManagementServiceImpl implements ServiceManagementService {
             }
         }
 
-        BigDecimal price = request.getPrice() != null ? request.getPrice() : listing.getStartingPrice();
-        long amountCents = request.getAmountCents() != null ? request.getAmountCents()
-                : price.multiply(BigDecimal.valueOf(100)).longValue();
+        // SERVER-AUTHORITATIVE PRICING: Calculate strictly from trusted server-owned service record
+        BigDecimal authoritativePrice = listing.getStartingPrice() != null ? listing.getStartingPrice() : BigDecimal.ZERO;
+        long authoritativeAmountCents = listing.getPriceCents() != null && listing.getPriceCents() > 0
+                ? listing.getPriceCents()
+                : authoritativePrice.multiply(BigDecimal.valueOf(100)).longValue();
+
+        if (authoritativeAmountCents <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid service pricing configuration");
+        }
 
         String generatedOrderId = "CL-ORD-" + (System.currentTimeMillis() % 100000);
 
@@ -159,9 +174,9 @@ public class ServiceManagementServiceImpl implements ServiceManagementService {
                 .title(listing.getTitle())
                 .category(listing.getCategory())
                 .tierName(request.getTierName() != null ? request.getTierName() : "Standard Package")
-                .price(price)
-                .amountCents(amountCents)
-                .currency(request.getCurrency() != null ? request.getCurrency() : listing.getCurrency())
+                .price(authoritativePrice)
+                .amountCents(authoritativeAmountCents)
+                .currency(currency)
                 .deliveryMode(request.getDeliveryMode() != null ? request.getDeliveryMode() : listing.getDeliveryMode())
                 .status("requested")
                 .startsAt(request.getStartsAt())
@@ -171,7 +186,12 @@ public class ServiceManagementServiceImpl implements ServiceManagementService {
                 .build();
 
         ServiceBooking saved = bookingRepository.save(booking);
-        log.info("Customer {} booked service {} with booking {}", customerId, serviceId, saved.getId());
+        try {
+            bookingRepository.flush();
+        } catch (DataIntegrityViolationException e) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Service is already booked for the selected appointment time");
+        }
+        log.info("Customer {} booked service {} with booking {} at authoritative price {} {}", customerId, serviceId, saved.getId(), authoritativeAmountCents, currency);
         return mapToBookingDto(saved);
     }
 
@@ -259,10 +279,9 @@ public class ServiceManagementServiceImpl implements ServiceManagementService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "You have already reviewed this service");
         }
 
-        // Customer eligibility: must have a booking for this service
+        // Customer eligibility: must have a confirmed or completed booking for this service (unconfirmed requests cannot review)
         boolean hasBooking = bookingRepository.existsByServiceIdAndCustomerIdAndStatus(serviceId, authorId, "confirmed")
-                || bookingRepository.existsByServiceIdAndCustomerIdAndStatus(serviceId, authorId, "completed")
-                || bookingRepository.existsByServiceIdAndCustomerIdAndStatus(serviceId, authorId, "requested");
+                || bookingRepository.existsByServiceIdAndCustomerIdAndStatus(serviceId, authorId, "completed");
 
         if (!hasBooking) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only customers who have booked this service can submit a review");

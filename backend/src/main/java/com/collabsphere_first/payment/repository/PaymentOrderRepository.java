@@ -15,5 +15,7 @@ public interface PaymentOrderRepository extends JpaRepository<PaymentOrder, UUID
     Optional<PaymentOrder> findByIdempotencyKey(String idempotencyKey);
     List<PaymentOrder> findByUserIdOrderByCreatedAtDesc(Long userId);
     Optional<PaymentOrder> findByGatewayOrderId(String gatewayOrderId);
+    Optional<PaymentOrder> findByGatewayPaymentId(String gatewayPaymentId);
+    Optional<PaymentOrder> findByGatewayPaymentIdAndStatus(String gatewayPaymentId, String status);
 }
 

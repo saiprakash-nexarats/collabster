@@ -8,14 +8,18 @@ import com.collabsphere_first.learning.repository.CourseEnrollmentRepository;
 import com.collabsphere_first.learning.repository.CourseRepository;
 import com.collabsphere_first.mentor.entity.MentorSlot;
 import com.collabsphere_first.mentor.repository.MentorSlotRepository;
+import com.collabsphere_first.payment.dto.*;
 import com.collabsphere_first.payment.entity.*;
 import com.collabsphere_first.payment.repository.*;
+import com.collabsphere_first.payment.service.PaymentService;
+import com.collabsphere_first.services.dto.*;
 import com.collabsphere_first.services.entity.ServiceBooking;
 import com.collabsphere_first.services.entity.ServiceListing;
 import com.collabsphere_first.services.entity.ServiceReview;
 import com.collabsphere_first.services.repository.ServiceBookingRepository;
 import com.collabsphere_first.services.repository.ServiceListingRepository;
 import com.collabsphere_first.services.repository.ServiceReviewRepository;
+import com.collabsphere_first.services.service.ServiceManagementService;
 import com.collabsphere_first.user.entity.AuthProvider;
 import com.collabsphere_first.user.entity.User;
 import com.collabsphere_first.user.repository.UserRepository;
@@ -31,6 +35,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.net.Socket;
@@ -104,6 +109,12 @@ public class ServicesAndPaymentsPostgreSqlIntegrationTest {
 
     @Autowired
     private CourseCertificateRepository courseCertificateRepository;
+
+    @Autowired
+    private PaymentService paymentService;
+
+    @Autowired
+    private ServiceManagementService serviceManagementService;
 
     @Autowired
     private PlatformTransactionManager transactionManager;
@@ -530,5 +541,226 @@ public class ServicesAndPaymentsPostgreSqlIntegrationTest {
 
         ServiceBooking finalBooking = serviceBookingRepository.findById(bookingId).orElseThrow();
         assertThat(finalBooking.getStatus()).isEqualTo("confirmed");
+    }
+
+    @Test
+    @DisplayName("P3 Concurrency: Real PostgreSQL payout balance reservation under concurrent transactions")
+    void testConcurrentPayoutBalanceReservationOnPostgreSql() throws Exception {
+        TransactionTemplate tx = new TransactionTemplate(transactionManager);
+
+        // Credit provider account with exactly 10,000 cents
+        tx.execute(status -> {
+            financialLedgerRepository.save(FinancialLedgerEntry.builder()
+                    .userId(provider.getId())
+                    .entryType("PAYMENT_CREDIT")
+                    .amountCents(10000L)
+                    .currency("INR")
+                    .balanceAfterCents(10000L)
+                    .description("Initial earnings for concurrency test")
+                    .build());
+            return null;
+        });
+
+        long initialBalance = financialLedgerRepository.calculateUserBalanceCents(provider.getId());
+        assertThat(initialBalance).isEqualTo(10000L);
+
+        // 5 concurrent threads each attempt to request 5,000 cents payout
+        // Total requested = 25,000 cents; total available = 10,000 cents
+        int numThreads = 5;
+        ExecutorService executor = Executors.newFixedThreadPool(numThreads);
+        CountDownLatch readyLatch = new CountDownLatch(numThreads);
+        CountDownLatch startLatch = new CountDownLatch(1);
+        AtomicInteger successCount = new AtomicInteger(0);
+        AtomicInteger rejectedCount = new AtomicInteger(0);
+
+        List<Future<?>> futures = new ArrayList<>();
+        for (int i = 0; i < numThreads; i++) {
+            futures.add(executor.submit(() -> {
+                readyLatch.countDown();
+                try {
+                    startLatch.await();
+                    CreatePayoutRequest request = CreatePayoutRequest.builder()
+                            .amountCents(5000L)
+                            .currency("INR")
+                            .destinationReference("ICIC0001-CONC")
+                            .build();
+
+                    PayoutRequestDto dto = paymentService.requestPayout(request, provider.getId());
+                    if (dto != null && "completed".equalsIgnoreCase(dto.getStatus())) {
+                        successCount.incrementAndGet();
+                    } else {
+                        rejectedCount.incrementAndGet();
+                    }
+                } catch (ResponseStatusException e) {
+                    if (e.getStatusCode().is4xxClientError()) {
+                        rejectedCount.incrementAndGet();
+                    }
+                } catch (Exception e) {
+                    rejectedCount.incrementAndGet();
+                }
+            }));
+        }
+
+        readyLatch.await(5, TimeUnit.SECONDS);
+        startLatch.countDown();
+
+        for (Future<?> f : futures) {
+            f.get(10, TimeUnit.SECONDS);
+        }
+        executor.shutdown();
+
+        // Exactly 2 requests succeed (2 * 5,000 = 10,000 cents) and 3 are rejected with 400 Insufficient balance
+        assertThat(successCount.get())
+                .as("Exactly 2 payout requests of 5000 cents can succeed with 10000 cents balance")
+                .isEqualTo(2);
+        assertThat(rejectedCount.get())
+                .as("Remaining 3 concurrent requests must be rejected to prevent overdraft")
+                .isEqualTo(3);
+
+        long finalBalance = financialLedgerRepository.calculateUserBalanceCents(provider.getId());
+        assertThat(finalBalance).isEqualTo(0L);
+    }
+
+    @Test
+    @DisplayName("P3 Concurrency: Real PostgreSQL service appointment slot double-booking rejection")
+    void testConcurrentServiceSlotBookingOnPostgreSql() throws Exception {
+        TransactionTemplate tx = new TransactionTemplate(transactionManager);
+
+        UUID serviceId = tx.execute(status -> {
+            ServiceListing listing = serviceListingRepository.save(ServiceListing.builder()
+                    .providerId(provider.getId())
+                    .title("High-Performance Database Consulting")
+                    .startingPrice(new BigDecimal("25000.00"))
+                    .priceCents(2500000L)
+                    .currency("INR")
+                    .state("active")
+                    .build());
+            return listing.getId();
+        });
+
+        Instant slotTime = Instant.now().plus(7, ChronoUnit.DAYS).truncatedTo(ChronoUnit.HOURS);
+
+        int numThreads = 5;
+        ExecutorService executor = Executors.newFixedThreadPool(numThreads);
+        CountDownLatch readyLatch = new CountDownLatch(numThreads);
+        CountDownLatch startLatch = new CountDownLatch(1);
+        AtomicInteger bookedCount = new AtomicInteger(0);
+        AtomicInteger conflictCount = new AtomicInteger(0);
+
+        List<Future<?>> futures = new ArrayList<>();
+        for (int i = 0; i < numThreads; i++) {
+            futures.add(executor.submit(() -> {
+                readyLatch.countDown();
+                try {
+                    startLatch.await();
+                    CreateServiceBookingRequest request = CreateServiceBookingRequest.builder()
+                            .startsAt(slotTime)
+                            .notes("Slot reservation concurrency test")
+                            .build();
+
+                    ServiceBookingDto dto = serviceManagementService.bookService(serviceId, request, customer.getId());
+                    if (dto != null) {
+                        bookedCount.incrementAndGet();
+                    }
+                } catch (ResponseStatusException e) {
+                    if (e.getStatusCode().value() == 409) {
+                        conflictCount.incrementAndGet();
+                    }
+                } catch (Exception e) {
+                    conflictCount.incrementAndGet();
+                }
+            }));
+        }
+
+        readyLatch.await(5, TimeUnit.SECONDS);
+        startLatch.countDown();
+
+        for (Future<?> f : futures) {
+            f.get(10, TimeUnit.SECONDS);
+        }
+        executor.shutdown();
+
+        // Exactly 1 thread successfully books the slot; 4 threads encounter 409 Conflict
+        assertThat(bookedCount.get())
+                .as("Only one concurrent booking can claim the appointment time slot")
+                .isEqualTo(1);
+        assertThat(conflictCount.get())
+                .as("Competing booking attempts must be rejected with 409 Conflict")
+                .isEqualTo(numThreads - 1);
+
+        long bookingsInDb = serviceBookingRepository.findAll().stream()
+                .filter(b -> b.getServiceId().equals(serviceId) && slotTime.equals(b.getStartsAt()))
+                .count();
+        assertThat(bookingsInDb).isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("P3 Security: Authoritative pricing and payment confirmation security in PostgreSQL")
+    void testPaymentSecurityNegativeCasesOnPostgreSql() {
+        // 1. Create service listing with authoritative price 15,000 INR (1,500,000 cents)
+        ServiceListing listing = serviceListingRepository.save(ServiceListing.builder()
+                .providerId(provider.getId())
+                .title("Security Vulnerability Assessment")
+                .startingPrice(new BigDecimal("15000.00"))
+                .priceCents(1500000L)
+                .currency("INR")
+                .state("active")
+                .build());
+
+        // 2. Client attempts price manipulation: price=1.00, amountCents=100
+        CreateServiceBookingRequest bookingRequest = CreateServiceBookingRequest.builder()
+                .price(new BigDecimal("1.00"))
+                .amountCents(100L)
+                .currency("INR")
+                .notes("Testing price tampering")
+                .build();
+
+        ServiceBookingDto bookingDto = serviceManagementService.bookService(listing.getId(), bookingRequest, customer.getId());
+
+        // Verified: Server ignores client price and persists authoritative listing price
+        assertThat(bookingDto.getAmountCents()).isEqualTo(1500000L);
+        assertThat(bookingDto.getPrice()).isEqualByComparingTo(new BigDecimal("15000.00"));
+
+        // 3. Create payment order for booking; client again tries to pass amountCents=100
+        CreatePaymentOrderRequest orderRequest = CreatePaymentOrderRequest.builder()
+                .bookingId(bookingDto.getId())
+                .amountCents(100L)
+                .currency("INR")
+                .build();
+
+        PaymentOrderDto orderDto = paymentService.createOrder(orderRequest, customer.getId());
+        assertThat(orderDto.getAmountCents()).isEqualTo(1500000L);
+
+        // 4. Confirmation with missing payment ID throws 400
+        ConfirmPaymentOrderRequest missingPaymentRequest = ConfirmPaymentOrderRequest.builder()
+                .gatewayPaymentId("")
+                .build();
+
+        assertThatThrownBy(() -> paymentService.confirmOrder(orderDto.getId(), missingPaymentRequest, customer.getId()))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Missing required gateway payment identifier");
+
+        // 5. Confirmation with arbitrary unknown payment ID throws 400
+        ConfirmPaymentOrderRequest fakePaymentRequest = ConfirmPaymentOrderRequest.builder()
+                .gatewayPaymentId("pay_arbitrary_unregistered_123")
+                .build();
+
+        assertThatThrownBy(() -> paymentService.confirmOrder(orderDto.getId(), fakePaymentRequest, customer.getId()))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Payment verification failed with provider");
+
+        // 6. Valid sandbox payment confirmation
+        String validSandboxPaymentId = "sandbox_pay_" + orderDto.getGatewayOrderId().substring("sandbox_ord_".length());
+        ConfirmPaymentOrderRequest validRequest = ConfirmPaymentOrderRequest.builder()
+                .gatewayPaymentId(validSandboxPaymentId)
+                .build();
+
+        PaymentOrderDto confirmed = paymentService.confirmOrder(orderDto.getId(), validRequest, customer.getId());
+        assertThat(confirmed.getStatus()).isEqualTo("paid");
+        assertThat(confirmed.getGatewayPaymentId()).isEqualTo(validSandboxPaymentId);
+
+        // 7. Repeated confirmation with same payment ID is idempotent
+        PaymentOrderDto idempotentConfirmed = paymentService.confirmOrder(orderDto.getId(), validRequest, customer.getId());
+        assertThat(idempotentConfirmed.getStatus()).isEqualTo("paid");
     }
 }

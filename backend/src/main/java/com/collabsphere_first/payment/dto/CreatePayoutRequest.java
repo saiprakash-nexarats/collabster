@@ -25,6 +25,8 @@ public class CreatePayoutRequest {
     @NotBlank(message = "Destination reference is required")
     private String destinationReference;
 
+    private String idempotencyKey;
+
     private String notes;
 }
 

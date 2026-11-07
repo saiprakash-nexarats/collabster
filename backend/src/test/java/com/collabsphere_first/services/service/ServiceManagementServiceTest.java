@@ -205,6 +205,43 @@ class ServiceManagementServiceTest {
     }
 
     @Test
+    @DisplayName("bookService: client price manipulation is ignored; server authoritative listing price is enforced")
+    void bookService_clientPriceIgnored_enforcesAuthoritativeListingPrice() {
+        // Client attempts to pay 1.00 instead of 4999.00
+        CreateServiceBookingRequest request = CreateServiceBookingRequest.builder()
+                .price(new BigDecimal("1.00"))
+                .amountCents(100L)
+                .currency("USD")
+                .build();
+
+        when(listingRepository.findById(serviceId)).thenReturn(Optional.of(listing));
+        when(bookingRepository.save(any(ServiceBooking.class))).thenAnswer(i -> {
+            ServiceBooking b = i.getArgument(0);
+            b.setId(UUID.randomUUID());
+            return b;
+        });
+
+        ServiceBookingDto dto = serviceManagementService.bookService(serviceId, request, customerId);
+
+        assertThat(dto.getPrice()).isEqualTo(listing.getStartingPrice());
+        assertThat(dto.getAmountCents()).isEqualTo(listing.getPriceCents());
+        assertThat(dto.getCurrency()).isEqualTo(listing.getCurrency());
+    }
+
+    @Test
+    @DisplayName("bookService: rejects unsupported service currency with 400 Bad Request")
+    void bookService_unsupportedCurrency_throwsBadRequest() {
+        listing.setCurrency("BITCOIN");
+        when(listingRepository.findById(serviceId)).thenReturn(Optional.of(listing));
+
+        CreateServiceBookingRequest request = CreateServiceBookingRequest.builder().build();
+
+        assertThatThrownBy(() -> serviceManagementService.bookService(serviceId, request, customerId))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Unsupported service currency: BITCOIN");
+    }
+
+    @Test
     @DisplayName("bookService: rejects self-booking by provider with 400 Bad Request")
     void bookService_selfBooking_throwsBadRequest() {
         when(listingRepository.findById(serviceId)).thenReturn(Optional.of(listing));
@@ -419,7 +456,6 @@ class ServiceManagementServiceTest {
         when(reviewRepository.existsByServiceIdAndAuthorId(serviceId, customerId)).thenReturn(false);
         when(bookingRepository.existsByServiceIdAndCustomerIdAndStatus(serviceId, customerId, "confirmed")).thenReturn(false);
         when(bookingRepository.existsByServiceIdAndCustomerIdAndStatus(serviceId, customerId, "completed")).thenReturn(false);
-        when(bookingRepository.existsByServiceIdAndCustomerIdAndStatus(serviceId, customerId, "requested")).thenReturn(false);
 
         CreateServiceReviewRequest request = CreateServiceReviewRequest.builder()
                 .rating(5)

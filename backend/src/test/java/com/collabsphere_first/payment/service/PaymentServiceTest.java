@@ -7,6 +7,7 @@ import com.collabsphere_first.payment.repository.*;
 import com.collabsphere_first.payment.service.impl.PaymentServiceImpl;
 import com.collabsphere_first.services.entity.ServiceBooking;
 import com.collabsphere_first.services.repository.ServiceBookingRepository;
+import com.collabsphere_first.user.repository.UserRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -51,6 +52,9 @@ class PaymentServiceTest {
     private ServiceBookingRepository serviceBookingRepository;
 
     @Mock
+    private UserRepository userRepository;
+
+    @Mock
     private PaymentGatewayProvider gatewayProvider;
 
     @Spy
@@ -83,6 +87,11 @@ class PaymentServiceTest {
                 .createdAt(Instant.now())
                 .updatedAt(Instant.now())
                 .build();
+
+        lenient().when(userRepository.findByIdForUpdate(providerId))
+                .thenReturn(Optional.of(com.collabsphere_first.user.entity.User.builder().id(providerId).build()));
+        lenient().when(paymentOrderRepository.save(any(PaymentOrder.class)))
+                .thenAnswer(i -> i.getArgument(0));
     }
 
     @Test
@@ -352,5 +361,147 @@ class PaymentServiceTest {
         assertThatThrownBy(() -> paymentService.requestPayout(request, providerId))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("Insufficient eligible balance");
+    }
+
+    @Test
+    @DisplayName("confirmOrder: missing gatewayPaymentId throws 400 Bad Request")
+    void confirmOrder_missingPaymentId_throwsBadRequest() {
+        when(paymentOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+
+        ConfirmPaymentOrderRequest request = ConfirmPaymentOrderRequest.builder().gatewayPaymentId("").build();
+
+        assertThatThrownBy(() -> paymentService.confirmOrder(orderId, request, userId))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Missing required gateway payment identifier");
+    }
+
+    @Test
+    @DisplayName("confirmOrder: duplicate payment identifier on another order throws 409 Conflict")
+    void confirmOrder_reusedPaymentId_throwsConflict() {
+        PaymentOrder otherOrder = PaymentOrder.builder()
+                .id(UUID.randomUUID())
+                .orderNumber("ORD-OTHER-1")
+                .userId(999L)
+                .amountCents(500000L)
+                .currency("INR")
+                .status("paid")
+                .gatewayPaymentId("pay_already_used")
+                .build();
+
+        when(paymentOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(gatewayProvider.verifyPayment("pay_already_used", "sandbox_ord_test123"))
+                .thenReturn(new PaymentGatewayProvider.GatewayVerificationResult(true, "pay_already_used", "paid", 500000L, "INR"));
+        when(paymentOrderRepository.findByGatewayPaymentIdAndStatus("pay_already_used", "paid"))
+                .thenReturn(Optional.of(otherOrder));
+
+        ConfirmPaymentOrderRequest request = ConfirmPaymentOrderRequest.builder().gatewayPaymentId("pay_already_used").build();
+
+        assertThatThrownBy(() -> paymentService.confirmOrder(orderId, request, userId))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("already been applied to order");
+    }
+
+    @Test
+    @DisplayName("confirmOrder: gateway amount mismatch throws 400 Bad Request")
+    void confirmOrder_amountMismatch_throwsBadRequest() {
+        when(paymentOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(gatewayProvider.verifyPayment("pay_12345", "sandbox_ord_test123"))
+                .thenReturn(new PaymentGatewayProvider.GatewayVerificationResult(true, "pay_12345", "paid", 100000L, "INR")); // Verified 100k vs order 500k
+
+        ConfirmPaymentOrderRequest request = ConfirmPaymentOrderRequest.builder().gatewayPaymentId("pay_12345").build();
+
+        assertThatThrownBy(() -> paymentService.confirmOrder(orderId, request, userId))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Verified payment amount (100000 cents) does not match order amount");
+    }
+
+    @Test
+    @DisplayName("createOrder: idempotency key across different user throws 409 Conflict")
+    void createOrder_idempotency_differentUser_throwsConflict() {
+        PaymentOrder existingOrder = PaymentOrder.builder()
+                .id(UUID.randomUUID())
+                .userId(888L) // Different user owns this key
+                .idempotencyKey("shared-idem-key")
+                .amountCents(500000L)
+                .currency("INR")
+                .build();
+
+        when(paymentOrderRepository.findByIdempotencyKey("shared-idem-key")).thenReturn(Optional.of(existingOrder));
+
+        CreatePaymentOrderRequest request = CreatePaymentOrderRequest.builder()
+                .idempotencyKey("shared-idem-key")
+                .amountCents(500000L)
+                .currency("INR")
+                .build();
+
+        assertThatThrownBy(() -> paymentService.createOrder(request, userId))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Idempotency key collision across user boundary");
+    }
+
+    @Test
+    @DisplayName("createOrder: idempotency key reused with different amount throws 409 Conflict")
+    void createOrder_idempotency_differentPayload_throwsConflict() {
+        PaymentOrder existingOrder = PaymentOrder.builder()
+                .id(UUID.randomUUID())
+                .userId(userId)
+                .idempotencyKey("same-user-key")
+                .amountCents(500000L)
+                .currency("INR")
+                .build();
+
+        when(paymentOrderRepository.findByIdempotencyKey("same-user-key")).thenReturn(Optional.of(existingOrder));
+
+        CreatePaymentOrderRequest request = CreatePaymentOrderRequest.builder()
+                .idempotencyKey("same-user-key")
+                .amountCents(999999L) // Different amount!
+                .currency("INR")
+                .build();
+
+        assertThatThrownBy(() -> paymentService.createOrder(request, userId))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Idempotency key reused with mismatched request parameters");
+    }
+
+    @Test
+    @DisplayName("createOrder: rejects payment creation for cancelled booking with 400 Bad Request")
+    void createOrder_cancelledBooking_throwsBadRequest() {
+        UUID bookingId = UUID.randomUUID();
+        ServiceBooking booking = ServiceBooking.builder()
+                .id(bookingId)
+                .customerId(userId)
+                .amountCents(500000L)
+                .currency("INR")
+                .status("cancelled")
+                .build();
+
+        when(serviceBookingRepository.findById(bookingId)).thenReturn(Optional.of(booking));
+
+        CreatePaymentOrderRequest request = CreatePaymentOrderRequest.builder()
+                .amountCents(500000L)
+                .currency("INR")
+                .bookingId(bookingId)
+                .build();
+
+        assertThatThrownBy(() -> paymentService.createOrder(request, userId))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Cannot create payment for booking in state 'cancelled'");
+    }
+
+    @Test
+    @DisplayName("processWebhook: ignores unsupported event type safely without marking paid")
+    void processWebhook_unsupportedEvent_ignoredSafely() {
+        String payload = "{\"id\":\"evt_failed_1\",\"event\":\"payment.failed\",\"payload\":{\"payment\":{\"entity\":{\"id\":\"pay_f_1\",\"order_id\":\"sandbox_ord_test123\"}}}}";
+        String signature = "sig_valid";
+
+        when(gatewayProvider.verifyWebhookSignature(payload, signature)).thenReturn(true);
+        when(paymentWebhookEventRepository.existsByEventId("evt_failed_1")).thenReturn(false);
+        when(gatewayProvider.getProviderName()).thenReturn("SandboxMock");
+
+        WebhookResponse response = paymentService.processWebhook(payload, signature);
+
+        assertThat(response.getStatus()).isEqualTo("ignored");
+        assertThat(response.getEventId()).isEqualTo("evt_failed_1");
+        verify(paymentOrderRepository, never()).findByGatewayOrderId(anyString());
     }
 }
