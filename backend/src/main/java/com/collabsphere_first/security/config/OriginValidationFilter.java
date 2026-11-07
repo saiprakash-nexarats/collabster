@@ -27,7 +27,7 @@ public class OriginValidationFilter extends OncePerRequestFilter {
                     .filter(s -> !s.isEmpty())
                     .collect(Collectors.toList());
         } else {
-            this.allowedOrigins = List.of("http://localhost:3000", "http://localhost:5173", "http://localhost:8080");
+            this.allowedOrigins = List.of("http://localhost", "http://localhost:80", "http://localhost:3000", "http://localhost:5173", "http://localhost:8080");
         }
     }
 
@@ -38,15 +38,14 @@ public class OriginValidationFilter extends OncePerRequestFilter {
         String path = request.getRequestURI();
         String method = request.getMethod();
 
-        boolean isAuthEndpoint = path != null && (path.startsWith("/api/v1/auth/") || path.startsWith("/v1/auth/"));
         boolean isStateChanging = "POST".equalsIgnoreCase(method) || "PUT".equalsIgnoreCase(method)
                 || "DELETE".equalsIgnoreCase(method) || "PATCH".equalsIgnoreCase(method);
 
-        if (isAuthEndpoint && isStateChanging) {
+        if (isStateChanging) {
             String origin = request.getHeader("Origin");
             if (origin != null && !origin.isBlank()) {
                 if (!isOriginAllowed(origin)) {
-                    log.warn("Blocked state-changing auth request from untrusted origin: {} on path {}", origin, path);
+                    log.warn("Blocked state-changing request from untrusted origin: {} on path {}", origin, path);
                     response.setStatus(HttpServletResponse.SC_FORBIDDEN);
                     response.setContentType("application/json");
                     response.getWriter().write("{\"status\":403,\"error\":\"Forbidden\",\"message\":\"Cross-origin request rejected: unauthorized origin\"}");

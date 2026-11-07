@@ -4,10 +4,14 @@ import com.collabsphere_first.community.dto.ApiResponse;
 import com.collabsphere_first.company.dto.*;
 import com.collabsphere_first.company.service.CompanyService;
 import com.collabsphere_first.security.service.CurrentUserService;
+import com.collabsphere_first.storage.dto.StorageFileResource;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -115,6 +119,28 @@ public class CompanyController {
         Long currentUserId = currentUserService.getCurrentUser().getId();
         CompanyDownloadTicketDto ticket = companyService.downloadDocument(id, documentId, currentUserId);
         return ResponseEntity.ok(ApiResponse.success(ticket));
+    }
+
+    @GetMapping(value = {"/{id}/documents/{documentId}/raw", "/{id}/documents/{documentId}/file"})
+    public ResponseEntity<Resource> downloadDocumentFile(
+            @PathVariable UUID id,
+            @PathVariable UUID documentId
+    ) {
+        Long currentUserId = currentUserService.getCurrentUser().getId();
+        StorageFileResource fileResource = companyService.downloadDocumentFile(id, documentId, currentUserId);
+
+        MediaType mediaType;
+        try {
+            mediaType = MediaType.parseMediaType(fileResource.getContentType());
+        } catch (Exception e) {
+            mediaType = MediaType.APPLICATION_OCTET_STREAM;
+        }
+
+        return ResponseEntity.ok()
+                .contentType(mediaType)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileResource.getFilename() + "\"")
+                .header(HttpHeaders.CONTENT_LENGTH, String.valueOf(fileResource.getContentLength()))
+                .body(fileResource.getResource());
     }
 
     @DeleteMapping("/{id}/documents/{documentId}")

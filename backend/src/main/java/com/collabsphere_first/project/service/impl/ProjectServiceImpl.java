@@ -4,6 +4,9 @@ import com.collabsphere_first.project.dto.*;
 import com.collabsphere_first.project.entity.*;
 import com.collabsphere_first.project.repository.*;
 import com.collabsphere_first.project.service.ProjectService;
+import com.collabsphere_first.storage.entity.StorageObject;
+import com.collabsphere_first.storage.enums.UploadState;
+import com.collabsphere_first.storage.repository.StorageObjectRepository;
 import com.collabsphere_first.user.entity.User;
 import com.collabsphere_first.user.repository.UserRepository;
 import com.collabsphere_first.workspace.service.WorkspaceAccessChecker;
@@ -27,6 +30,7 @@ public class ProjectServiceImpl implements ProjectService, WorkspaceAccessChecke
     private final ProjectFileRepository projectFileRepository;
     private final ProjectTaskRepository projectTaskRepository;
     private final ProjectMilestoneRepository projectMilestoneRepository;
+    private final StorageObjectRepository storageObjectRepository;
     private final UserRepository userRepository;
 
     @Override
@@ -122,22 +126,32 @@ public class ProjectServiceImpl implements ProjectService, WorkspaceAccessChecke
         User targetUser = userRepository.findById(targetUserId)
                 .orElseThrow(() -> new IllegalArgumentException("Target user not found: " + targetUserId));
 
+        // Prevent unauthorized owner role assignment via invitations
+        String role = request.getRole() != null ? request.getRole().trim().toLowerCase(Locale.ROOT) : "collaborator";
+        if ("owner".equalsIgnoreCase(role)) {
+            throw new IllegalArgumentException("Cannot assign owner role via invitation");
+        }
+        if (!Set.of("maintainer", "collaborator", "viewer").contains(role)) {
+            throw new IllegalArgumentException("Invalid project member role: " + role);
+        }
+
         Optional<ProjectMember> existing = projectMemberRepository.findByProjectIdAndUserId(projectId, targetUserId);
         if (existing.isPresent()) {
             ProjectMember member = existing.get();
             if ("active".equalsIgnoreCase(member.getMembershipState())) {
                 throw new IllegalStateException("User is already an active member of this project");
             }
-            member.setRole(request.getRole() != null ? request.getRole().toLowerCase(Locale.ROOT) : "collaborator");
+            member.setRole(role);
             member.setMembershipState("pending");
             member.setInvitedBy(currentUserId);
+            member.setUpdatedAt(Instant.now());
             return toMemberDto(projectMemberRepository.save(member));
         }
 
         ProjectMember newMember = ProjectMember.builder()
                 .projectId(projectId)
                 .userId(targetUserId)
-                .role(request.getRole() != null ? request.getRole().toLowerCase(Locale.ROOT) : "collaborator")
+                .role(role)
                 .membershipState("pending")
                 .invitedBy(currentUserId)
                 .createdAt(Instant.now())
@@ -158,6 +172,10 @@ public class ProjectServiceImpl implements ProjectService, WorkspaceAccessChecke
         ProjectMember member = projectMemberRepository.findByProjectIdAndUserId(projectId, currentUserId)
                 .orElseThrow(() -> new IllegalArgumentException("No pending invitation found for user on project: " + projectId));
 
+        if (!"pending".equalsIgnoreCase(member.getMembershipState())) {
+            throw new IllegalStateException("Only pending invitations can be accepted; current state: " + member.getMembershipState());
+        }
+
         member.setMembershipState("active");
         member.setUpdatedAt(Instant.now());
         return toMemberDto(projectMemberRepository.save(member));
@@ -167,7 +185,7 @@ public class ProjectServiceImpl implements ProjectService, WorkspaceAccessChecke
     @Transactional(readOnly = true)
     public List<ProjectFileDto> listFiles(UUID projectId, Long currentUserId) {
         Project project = getProjectOrThrow(projectId);
-        requireProjectAccess(project, currentUserId);
+        requireProjectReadAccess(project, currentUserId);
 
         return projectFileRepository.findByProjectIdOrderByPathAsc(projectId).stream()
                 .map(this::toFileDto)
@@ -178,13 +196,36 @@ public class ProjectServiceImpl implements ProjectService, WorkspaceAccessChecke
     @Transactional
     public ProjectFileDto saveFile(UUID projectId, SaveProjectFileRequest request, Long currentUserId) {
         Project project = getProjectOrThrow(projectId);
-        requireProjectAccess(project, currentUserId);
+        requireProjectWriteAccess(project, currentUserId);
 
         if (request.getPath() == null || request.getPath().trim().isEmpty()) {
             throw new IllegalArgumentException("File path is required");
         }
 
-        String path = request.getPath().trim();
+        String path = sanitizePath(request.getPath());
+
+        // Validate storage object if attached
+        if (request.getStorageObjectId() != null) {
+            StorageObject storageObject = storageObjectRepository.findByIdAndIsDeletedFalse(request.getStorageObjectId())
+                    .orElseThrow(() -> new IllegalArgumentException("Storage object not found or deleted: " + request.getStorageObjectId()));
+            if (storageObject.getUploadState() == UploadState.QUARANTINED) {
+                throw new AccessDeniedException("Storage object is quarantined");
+            }
+            if (storageObject.getUploadState() != UploadState.COMPLETED) {
+                throw new IllegalStateException("Storage object is not completed: " + storageObject.getUploadState());
+            }
+            if (!currentUserId.equals(storageObject.getOwnerId())) {
+                throw new AccessDeniedException("Caller does not own this storage object");
+            }
+            if (storageObject.getWorkspaceId() != null && !storageObject.getWorkspaceId().equals(projectId)) {
+                throw new AccessDeniedException("Storage object belongs to another workspace");
+            }
+            if (storageObject.getWorkspaceId() == null) {
+                storageObject.setWorkspaceId(projectId);
+                storageObjectRepository.save(storageObject);
+            }
+        }
+
         Optional<ProjectFile> existing = projectFileRepository.findByProjectIdAndPath(projectId, path);
 
         ProjectFile file;
@@ -218,7 +259,7 @@ public class ProjectServiceImpl implements ProjectService, WorkspaceAccessChecke
     @Transactional
     public void deleteFile(UUID projectId, UUID fileId, Long currentUserId) {
         Project project = getProjectOrThrow(projectId);
-        requireProjectAccess(project, currentUserId);
+        requireProjectWriteAccess(project, currentUserId);
 
         ProjectFile file = projectFileRepository.findByProjectIdAndId(projectId, fileId)
                 .orElseThrow(() -> new IllegalArgumentException("File not found: " + fileId));
@@ -230,7 +271,7 @@ public class ProjectServiceImpl implements ProjectService, WorkspaceAccessChecke
     @Transactional(readOnly = true)
     public List<ProjectTaskDto> listTasks(UUID projectId, Long currentUserId) {
         Project project = getProjectOrThrow(projectId);
-        requireProjectAccess(project, currentUserId);
+        requireProjectReadAccess(project, currentUserId);
 
         return projectTaskRepository.findByProjectIdOrderByCreatedAtDesc(projectId).stream()
                 .map(this::toTaskDto)
@@ -241,7 +282,7 @@ public class ProjectServiceImpl implements ProjectService, WorkspaceAccessChecke
     @Transactional
     public ProjectTaskDto createTask(UUID projectId, CreateProjectTaskRequest request, Long currentUserId) {
         Project project = getProjectOrThrow(projectId);
-        requireProjectAccess(project, currentUserId);
+        requireProjectWriteAccess(project, currentUserId);
 
         if (request.getTitle() == null || request.getTitle().trim().isEmpty()) {
             throw new IllegalArgumentException("Task title is required");
@@ -266,7 +307,7 @@ public class ProjectServiceImpl implements ProjectService, WorkspaceAccessChecke
     @Transactional
     public ProjectTaskDto updateTaskStatus(UUID projectId, UUID taskId, String status, Long currentUserId) {
         Project project = getProjectOrThrow(projectId);
-        requireProjectAccess(project, currentUserId);
+        requireProjectWriteAccess(project, currentUserId);
 
         if (status == null || status.trim().isEmpty()) {
             throw new IllegalArgumentException("Task status is required");
@@ -285,7 +326,7 @@ public class ProjectServiceImpl implements ProjectService, WorkspaceAccessChecke
     @Transactional(readOnly = true)
     public List<ProjectMilestoneDto> listMilestones(UUID projectId, Long currentUserId) {
         Project project = getProjectOrThrow(projectId);
-        requireProjectAccess(project, currentUserId);
+        requireProjectReadAccess(project, currentUserId);
 
         return projectMilestoneRepository.findByProjectIdOrderByCreatedAtAsc(projectId).stream()
                 .map(this::toMilestoneDto)
@@ -296,7 +337,7 @@ public class ProjectServiceImpl implements ProjectService, WorkspaceAccessChecke
     @Transactional
     public ProjectMilestoneDto createMilestone(UUID projectId, CreateProjectMilestoneRequest request, Long currentUserId) {
         Project project = getProjectOrThrow(projectId);
-        requireProjectAccess(project, currentUserId);
+        requireProjectWriteAccess(project, currentUserId);
 
         if (request.getTitle() == null || request.getTitle().trim().isEmpty()) {
             throw new IllegalArgumentException("Milestone title is required");
@@ -336,8 +377,62 @@ public class ProjectServiceImpl implements ProjectService, WorkspaceAccessChecke
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public boolean supportsWorkspace(UUID workspaceId) {
+        if (workspaceId == null) {
+            return false;
+        }
+        return projectRepository.existsById(workspaceId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public boolean isAuthorized(UUID workspaceId, Long userId) {
         return isUserAuthorized(workspaceId, userId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean isAuthorizedForWrite(UUID workspaceId, Long userId) {
+        if (workspaceId == null || userId == null) {
+            return false;
+        }
+        Optional<Project> projectOpt = projectRepository.findById(workspaceId);
+        if (projectOpt.isEmpty()) {
+            return false;
+        }
+        Project project = projectOpt.get();
+        if (userId.equals(project.getOwnerId())) {
+            return true;
+        }
+        Optional<ProjectMember> memberOpt = projectMemberRepository.findByProjectIdAndUserId(workspaceId, userId);
+        if (memberOpt.isPresent()) {
+            ProjectMember m = memberOpt.get();
+            if ("active".equalsIgnoreCase(m.getMembershipState())) {
+                String role = m.getRole() != null ? m.getRole().toLowerCase(Locale.ROOT) : "";
+                return "owner".equalsIgnoreCase(role) || "maintainer".equalsIgnoreCase(role) || "collaborator".equalsIgnoreCase(role);
+            }
+        }
+        return false;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean isAuthorizedForStorageDownload(UUID workspaceId, UUID storageObjectId, Long userId) {
+        if (workspaceId == null || storageObjectId == null || userId == null) {
+            return false;
+        }
+        if (!supportsWorkspace(workspaceId)) {
+            return false;
+        }
+        // Verify this storage object is linked to a file in this project
+        boolean isLinked = projectFileRepository.findByProjectIdOrderByPathAsc(workspaceId).stream()
+                .anyMatch(f -> storageObjectId.equals(f.getStorageObjectId()));
+        if (!isLinked) {
+            return false;
+        }
+        // User must have read access to the project
+        return isAuthorized(workspaceId, userId);
     }
 
     private Project getProjectOrThrow(UUID projectId) {
@@ -345,7 +440,7 @@ public class ProjectServiceImpl implements ProjectService, WorkspaceAccessChecke
                 .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));
     }
 
-    private void requireProjectAccess(Project project, Long currentUserId) {
+    private void requireProjectReadAccess(Project project, Long currentUserId) {
         if (currentUserId == null) {
             throw new AccessDeniedException("Authentication required");
         }
@@ -359,6 +454,29 @@ public class ProjectServiceImpl implements ProjectService, WorkspaceAccessChecke
         if (!isMember) {
             throw new AccessDeniedException("You do not have access to this project");
         }
+    }
+
+    private void requireProjectWriteAccess(Project project, Long currentUserId) {
+        if (currentUserId == null) {
+            throw new AccessDeniedException("Authentication required");
+        }
+        if (currentUserId.equals(project.getOwnerId())) {
+            return;
+        }
+        Optional<ProjectMember> memberOpt = projectMemberRepository.findByProjectIdAndUserId(project.getId(), currentUserId);
+        if (memberOpt.isPresent()) {
+            ProjectMember m = memberOpt.get();
+            if ("active".equalsIgnoreCase(m.getMembershipState())) {
+                String role = m.getRole() != null ? m.getRole().toLowerCase(Locale.ROOT) : "";
+                if ("owner".equalsIgnoreCase(role) || "maintainer".equalsIgnoreCase(role) || "collaborator".equalsIgnoreCase(role)) {
+                    return;
+                }
+                if ("viewer".equalsIgnoreCase(role)) {
+                    throw new AccessDeniedException("Viewers have read-only access to this project");
+                }
+            }
+        }
+        throw new AccessDeniedException("Active project membership with write permission required");
     }
 
     private void requireProjectManager(Project project, Long currentUserId) {
@@ -376,6 +494,27 @@ public class ProjectServiceImpl implements ProjectService, WorkspaceAccessChecke
             }
         }
         throw new AccessDeniedException("Only project owners and maintainers can perform this action");
+    }
+
+    private String sanitizePath(String rawPath) {
+        if (rawPath == null || rawPath.trim().isEmpty()) {
+            throw new IllegalArgumentException("File path is required");
+        }
+        String trimmed = rawPath.trim();
+        if (trimmed.startsWith("/") || trimmed.startsWith("\\")) {
+            throw new IllegalArgumentException("Path must be relative, absolute paths are not allowed: " + rawPath);
+        }
+        String normalized = trimmed.replace('\\', '/');
+        if (normalized.contains("..") || normalized.contains("\0")) {
+            throw new IllegalArgumentException("Path traversal or null bytes detected in path: " + rawPath);
+        }
+        if (normalized.isEmpty()) {
+            throw new IllegalArgumentException("Invalid file path");
+        }
+        if (normalized.length() > 255) {
+            throw new IllegalArgumentException("File path cannot exceed 255 characters");
+        }
+        return normalized;
     }
 
     private ProjectDto toProjectDto(Project p) {

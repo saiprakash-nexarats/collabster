@@ -333,12 +333,12 @@ public class StorageManagementServiceImpl implements StorageManagementService {
             throw new InvalidUploadException("Cannot download uncompleted file in state: " + storageObject.getUploadState());
         }
 
-        // Authorization check: file owner or workspace member
+        // Authorization check: file owner or authorized workspace member
         boolean isOwner = currentUserId != null && currentUserId.equals(storageObject.getOwnerId());
-        boolean isWorkspaceMember = storageObject.getWorkspaceId() != null && currentUserId != null
-                && isUserAuthorizedForWorkspace(currentUserId, storageObject.getWorkspaceId());
+        boolean isAuthorizedWorkspaceDownload = storageObject.getWorkspaceId() != null && currentUserId != null
+                && isUserAuthorizedForStorageDownload(currentUserId, storageObject.getWorkspaceId(), objectId);
 
-        if (!isOwner && !isWorkspaceMember) {
+        if (!isOwner && !isAuthorizedWorkspaceDownload) {
             throw new StorageAccessDeniedException("Unauthorized to download: User is not authorized to download file: " + objectId);
         }
 
@@ -362,10 +362,10 @@ public class StorageManagementServiceImpl implements StorageManagementService {
                 .orElseThrow(() -> new StorageObjectNotFoundException("Storage object not found: " + objectId));
 
         boolean isOwner = currentUserId != null && currentUserId.equals(storageObject.getOwnerId());
-        boolean isWorkspaceMember = storageObject.getWorkspaceId() != null && currentUserId != null
-                && isUserAuthorizedForWorkspace(currentUserId, storageObject.getWorkspaceId());
+        boolean isAuthorizedWorkspaceDownload = storageObject.getWorkspaceId() != null && currentUserId != null
+                && isUserAuthorizedForStorageDownload(currentUserId, storageObject.getWorkspaceId(), objectId);
 
-        if (!isOwner && !isWorkspaceMember) {
+        if (!isOwner && !isAuthorizedWorkspaceDownload) {
             throw new StorageAccessDeniedException("User is not authorized to view file metadata: " + objectId);
         }
 
@@ -411,11 +411,29 @@ public class StorageManagementServiceImpl implements StorageManagementService {
         if (accessCheckers != null) {
             for (com.collabsphere_first.workspace.service.WorkspaceAccessChecker checker : accessCheckers) {
                 try {
-                    if (checker.isAuthorized(workspaceId, userId)) {
-                        return true;
+                    if (checker.supportsWorkspace(workspaceId)) {
+                        return checker.isAuthorizedForWrite(workspaceId, userId);
                     }
                 } catch (Exception e) {
                     log.debug("Workspace authorization checker threw exception: {}", e.getMessage());
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean isUserAuthorizedForStorageDownload(Long userId, UUID workspaceId, UUID storageObjectId) {
+        if (userId == null || workspaceId == null || storageObjectId == null) {
+            return false;
+        }
+        if (accessCheckers != null) {
+            for (com.collabsphere_first.workspace.service.WorkspaceAccessChecker checker : accessCheckers) {
+                try {
+                    if (checker.supportsWorkspace(workspaceId)) {
+                        return checker.isAuthorizedForStorageDownload(workspaceId, storageObjectId, userId);
+                    }
+                } catch (Exception e) {
+                    log.debug("Workspace storage download checker threw exception: {}", e.getMessage());
                 }
             }
         }

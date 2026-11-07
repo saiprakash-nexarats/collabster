@@ -44,6 +44,9 @@ class ProjectServiceTest {
     private ProjectMilestoneRepository projectMilestoneRepository;
 
     @Mock
+    private com.collabsphere_first.storage.repository.StorageObjectRepository storageObjectRepository;
+
+    @Mock
     private UserRepository userRepository;
 
     @InjectMocks

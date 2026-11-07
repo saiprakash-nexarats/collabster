@@ -5,6 +5,8 @@ import com.collabsphere_first.company.entity.*;
 import com.collabsphere_first.company.repository.*;
 import com.collabsphere_first.company.service.impl.CompanyServiceImpl;
 import com.collabsphere_first.storage.entity.StorageObject;
+import com.collabsphere_first.storage.enums.UploadState;
+import com.collabsphere_first.storage.provider.ObjectStorageProvider;
 import com.collabsphere_first.storage.repository.StorageObjectRepository;
 import com.collabsphere_first.user.entity.User;
 import com.collabsphere_first.user.repository.UserRepository;
@@ -43,6 +45,9 @@ class CompanyServiceTest {
 
     @Mock
     private StorageObjectRepository storageObjectRepository;
+
+    @Mock
+    private ObjectStorageProvider storageProvider;
 
     @Mock
     private UserRepository userRepository;
@@ -195,6 +200,8 @@ class CompanyServiceTest {
         UUID storageObjectId = UUID.randomUUID();
         StorageObject storageObject = StorageObject.builder()
                 .id(storageObjectId)
+                .ownerId(ownerId)
+                .uploadState(UploadState.COMPLETED)
                 .filename("QuarterlyReport.pdf")
                 .contentType("application/pdf")
                 .verifiedBytes(10240L)
@@ -232,7 +239,7 @@ class CompanyServiceTest {
         when(companyDocumentRepository.findByCompanyIdAndIdAndIsArchivedFalse(companyId, docId)).thenReturn(Optional.of(savedDoc));
 
         CompanyDownloadTicketDto ticket = companyService.downloadDocument(companyId, docId, ownerId);
-        assertThat(ticket.getDownloadUrl()).contains(storageObjectId.toString());
+        assertThat(ticket.getDownloadUrl()).contains(docId.toString());
         assertThat(ticket.getExpiresIn()).isPositive();
     }
 

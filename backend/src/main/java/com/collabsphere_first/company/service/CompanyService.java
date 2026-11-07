@@ -1,6 +1,7 @@
 package com.collabsphere_first.company.service;
 
 import com.collabsphere_first.company.dto.*;
+import com.collabsphere_first.storage.dto.StorageFileResource;
 
 import java.util.List;
 import java.util.UUID;
@@ -16,6 +17,7 @@ public interface CompanyService {
     List<CompanyDocumentDto> listDocuments(UUID companyId, Long currentUserId);
     CompanyDocumentDto createDocument(UUID companyId, CreateCompanyDocumentRequest request, Long currentUserId);
     CompanyDownloadTicketDto downloadDocument(UUID companyId, UUID documentId, Long currentUserId);
+    StorageFileResource downloadDocumentFile(UUID companyId, UUID documentId, Long currentUserId);
     void archiveDocument(UUID companyId, UUID documentId, Long currentUserId);
     boolean isUserAuthorized(UUID companyId, Long currentUserId);
 }

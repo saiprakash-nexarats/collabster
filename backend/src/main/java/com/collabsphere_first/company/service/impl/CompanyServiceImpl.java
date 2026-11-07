@@ -4,17 +4,22 @@ import com.collabsphere_first.company.dto.*;
 import com.collabsphere_first.company.entity.*;
 import com.collabsphere_first.company.repository.*;
 import com.collabsphere_first.company.service.CompanyService;
+import com.collabsphere_first.storage.dto.StorageFileResource;
 import com.collabsphere_first.storage.entity.StorageObject;
+import com.collabsphere_first.storage.enums.UploadState;
+import com.collabsphere_first.storage.provider.ObjectStorageProvider;
 import com.collabsphere_first.storage.repository.StorageObjectRepository;
 import com.collabsphere_first.user.entity.User;
 import com.collabsphere_first.user.repository.UserRepository;
 import com.collabsphere_first.workspace.service.WorkspaceAccessChecker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.InputStreamResource;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.InputStream;
 import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -29,6 +34,7 @@ public class CompanyServiceImpl implements CompanyService, WorkspaceAccessChecke
     private final CompanyTaskRepository companyTaskRepository;
     private final CompanyDocumentRepository companyDocumentRepository;
     private final StorageObjectRepository storageObjectRepository;
+    private final ObjectStorageProvider storageProvider;
     private final UserRepository userRepository;
 
     @Override
@@ -121,22 +127,32 @@ public class CompanyServiceImpl implements CompanyService, WorkspaceAccessChecke
         User targetUser = userRepository.findById(targetUserId)
                 .orElseThrow(() -> new IllegalArgumentException("Target user not found: " + targetUserId));
 
+        // Prevent unauthorized owner role assignment via invitations
+        String role = request.getRole() != null ? request.getRole().trim().toLowerCase(Locale.ROOT) : "member";
+        if ("owner".equalsIgnoreCase(role)) {
+            throw new IllegalArgumentException("Cannot assign owner role via invitation");
+        }
+        if (!Set.of("admin", "member").contains(role)) {
+            throw new IllegalArgumentException("Invalid company member role: " + role);
+        }
+
         Optional<CompanyMember> existing = companyMemberRepository.findByCompanyIdAndUserId(companyId, targetUserId);
         if (existing.isPresent()) {
             CompanyMember member = existing.get();
             if ("active".equalsIgnoreCase(member.getMembershipState())) {
                 throw new IllegalStateException("User is already an active member of this company");
             }
-            member.setRole(request.getRole() != null ? request.getRole().toLowerCase(Locale.ROOT) : "member");
+            member.setRole(role);
             member.setMembershipState("pending");
             member.setInvitedBy(currentUserId);
+            member.setUpdatedAt(Instant.now());
             return toMemberDto(companyMemberRepository.save(member));
         }
 
         CompanyMember newMember = CompanyMember.builder()
                 .companyId(companyId)
                 .userId(targetUserId)
-                .role(request.getRole() != null ? request.getRole().toLowerCase(Locale.ROOT) : "member")
+                .role(role)
                 .membershipState("pending")
                 .invitedBy(currentUserId)
                 .createdAt(Instant.now())
@@ -156,6 +172,10 @@ public class CompanyServiceImpl implements CompanyService, WorkspaceAccessChecke
 
         CompanyMember member = companyMemberRepository.findByCompanyIdAndUserId(companyId, currentUserId)
                 .orElseThrow(() -> new IllegalArgumentException("No pending invitation found for user on company: " + companyId));
+
+        if (!"pending".equalsIgnoreCase(member.getMembershipState())) {
+            throw new IllegalStateException("Only pending invitations can be accepted; current state: " + member.getMembershipState());
+        }
 
         member.setMembershipState("active");
         member.setUpdatedAt(Instant.now());
@@ -256,6 +276,24 @@ public class CompanyServiceImpl implements CompanyService, WorkspaceAccessChecke
         StorageObject storageObject = storageObjectRepository.findByIdAndIsDeletedFalse(request.getObjectId())
                 .orElseThrow(() -> new IllegalArgumentException("Storage object not found or deleted: " + request.getObjectId()));
 
+        if (storageObject.getUploadState() == UploadState.QUARANTINED) {
+            throw new AccessDeniedException("Storage object is quarantined");
+        }
+        if (storageObject.getUploadState() != UploadState.COMPLETED) {
+            throw new IllegalStateException("Storage object is not in COMPLETED state: " + storageObject.getUploadState());
+        }
+        if (!currentUserId.equals(storageObject.getOwnerId())) {
+            throw new AccessDeniedException("Caller does not own this storage object");
+        }
+        if (storageObject.getWorkspaceId() != null && !storageObject.getWorkspaceId().equals(companyId)) {
+            throw new AccessDeniedException("Storage object belongs to another workspace");
+        }
+
+        if (storageObject.getWorkspaceId() == null) {
+            storageObject.setWorkspaceId(companyId);
+            storageObjectRepository.save(storageObject);
+        }
+
         String title = request.getTitle() != null && !request.getTitle().trim().isEmpty()
                 ? request.getTitle().trim()
                 : storageObject.getFilename();
@@ -297,8 +335,37 @@ public class CompanyServiceImpl implements CompanyService, WorkspaceAccessChecke
         }
 
         return CompanyDownloadTicketDto.builder()
-                .downloadUrl("/api/v1/storage/files/" + document.getStorageObjectId() + "/download")
+                .downloadUrl("/v1/companies/" + companyId + "/documents/" + documentId + "/raw")
                 .expiresIn(900L)
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public StorageFileResource downloadDocumentFile(UUID companyId, UUID documentId, Long currentUserId) {
+        Company company = getCompanyOrThrow(companyId);
+        requireCompanyAccess(company, currentUserId);
+
+        CompanyDocument document = companyDocumentRepository.findByCompanyIdAndIdAndIsArchivedFalse(companyId, documentId)
+                .orElseThrow(() -> new IllegalArgumentException("Document not found: " + documentId));
+
+        if ("admin_only".equalsIgnoreCase(document.getAccessScope()) && !isCompanyAdmin(company, currentUserId)) {
+            throw new AccessDeniedException("Admin access required to download this document");
+        }
+
+        StorageObject storageObject = storageObjectRepository.findByIdAndIsDeletedFalse(document.getStorageObjectId())
+                .orElseThrow(() -> new IllegalArgumentException("Storage object not found: " + document.getStorageObjectId()));
+
+        if (storageObject.getUploadState() != UploadState.COMPLETED) {
+            throw new IllegalStateException("Storage object is not completed: " + storageObject.getUploadState());
+        }
+
+        InputStream stream = storageProvider.retrieveObject(storageObject.getStorageKey());
+        return StorageFileResource.builder()
+                .resource(new InputStreamResource(stream))
+                .filename(document.getTitle() != null && !document.getTitle().isBlank() ? document.getTitle() : storageObject.getFilename())
+                .contentType(storageObject.getContentType() != null ? storageObject.getContentType() : "application/octet-stream")
+                .contentLength(storageObject.getVerifiedBytes() != null ? storageObject.getVerifiedBytes() : storageObject.getExpectedBytes())
                 .build();
     }
 
@@ -342,8 +409,75 @@ public class CompanyServiceImpl implements CompanyService, WorkspaceAccessChecke
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public boolean supportsWorkspace(UUID workspaceId) {
+        if (workspaceId == null) {
+            return false;
+        }
+        return companyRepository.existsById(workspaceId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public boolean isAuthorized(UUID workspaceId, Long userId) {
         return isUserAuthorized(workspaceId, userId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean isAuthorizedForWrite(UUID workspaceId, Long userId) {
+        if (workspaceId == null || userId == null) {
+            return false;
+        }
+        Optional<Company> companyOpt = companyRepository.findById(workspaceId);
+        if (companyOpt.isEmpty()) {
+            return false;
+        }
+        Company company = companyOpt.get();
+        if (userId.equals(company.getOwnerId())) {
+            return true;
+        }
+        Optional<CompanyMember> memberOpt = companyMemberRepository.findByCompanyIdAndUserId(workspaceId, userId);
+        if (memberOpt.isPresent()) {
+            CompanyMember m = memberOpt.get();
+            return "active".equalsIgnoreCase(m.getMembershipState());
+        }
+        return false;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean isAuthorizedForStorageDownload(UUID workspaceId, UUID storageObjectId, Long userId) {
+        if (workspaceId == null || storageObjectId == null || userId == null) {
+            return false;
+        }
+        if (!supportsWorkspace(workspaceId)) {
+            return false;
+        }
+        Optional<Company> companyOpt = companyRepository.findById(workspaceId);
+        if (companyOpt.isEmpty()) {
+            return false;
+        }
+        Company company = companyOpt.get();
+
+        if (!isUserAuthorized(workspaceId, userId)) {
+            return false;
+        }
+
+        List<CompanyDocument> docs = companyDocumentRepository.findByCompanyIdAndIsArchivedFalseOrderByCreatedAtDesc(workspaceId);
+        Optional<CompanyDocument> docOpt = docs.stream()
+                .filter(d -> storageObjectId.equals(d.getStorageObjectId()))
+                .findFirst();
+
+        if (docOpt.isEmpty()) {
+            return false;
+        }
+
+        CompanyDocument doc = docOpt.get();
+        if ("admin_only".equalsIgnoreCase(doc.getAccessScope())) {
+            return isCompanyAdmin(company, userId);
+        }
+        return true;
     }
 
     private Company getCompanyOrThrow(UUID companyId) {
